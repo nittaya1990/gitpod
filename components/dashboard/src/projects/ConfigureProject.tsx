@@ -140,6 +140,14 @@ export default function () {
     }
   }
 
+  const cancelPrebuild = async () => {
+    try {
+      // await getGitpodService().server.cancelPrebuild(project.id, TODO prebuildId);
+    } catch (error) {
+      setEditorMessage(<EditorMessage type="warning" heading="Could not cancel prebuild." message={String(error).replace(/Error: Request \w+ failed with message: /, '')}/>);
+    }
+  }
+
   const onInstanceUpdate = (instance: WorkspaceInstance) => {
     setPrebuildInstance(instance);
   }
@@ -181,7 +189,9 @@ export default function () {
           {(prebuildInstance?.status.phase === "stopped" && !prebuildInstance?.status.conditions.failed)
               ? <a className="my-auto" href={`/#${project?.cloneUrl}`}><button className="secondary">New Workspace</button></a>
               : <button disabled={true} className="secondary">New Workspace</button>}
-          <button disabled={isDetecting || (prebuildWasTriggered && prebuildInstance?.status.phase !== "stopped")} onClick={buildProject}>Run Prebuild</button>
+          {(prebuildWasTriggered && prebuildInstance?.status.phase !== "stopped")
+              ? <button className="danger" disabled={prebuildInstance?.status.phase !== "initializing" && prebuildInstance?.status.phase !== "running"} onClick={cancelPrebuild}>Cancel Prebuild</button>
+              : <button disabled={isDetecting} onClick={buildProject}>Run Prebuild</button>}
         </div>
       </div>
     </div>
