@@ -1,4 +1,5 @@
 import { werft, exec } from './shell';
+import * as fs from 'fs';
 
 /**
  * Monitoring satellite deployment bits
@@ -14,12 +15,29 @@ import { werft, exec } from './shell';
 
 const sliceName = 'observability';
 
+/**
+ * installMonitoringSatellite installs monitoring-satellite, while updating its dependencies to the latest commit in the branch it is running.
+ */
 export async function installMonitoringSatellite(params: InstallMonitoringSatelliteParams) {
     werft.log(sliceName, `Cloning observability repository - Branch: ${params.branch}`)
     exec(`git clone --branch ${params.branch} https://roboquat:$(cat /mnt/secrets/monitoring-satellite-preview-token/token)@github.com/gitpod-io/observability.git`, {silent: true})
     werft.log(sliceName, 'installing jsonnet utility tools')
     exec('cd observability && make setup-workspace', {silent: true})
     werft.log(sliceName, 'rendering YAML files')
+    let currentCommit = exec(`git rev-parse HEAD`, {silent: true}).stdout.trim()
+    let pwd = exec(`pwd`, {silent: true}).stdout.trim()
+    werft.log(sliceName, `Updating monitoring-satellite to latest commit SHA: ${currentCommit}`);
+
+    let jsonnetFile = JSON.parse(fs.readFileSync(`${pwd}/observability/jsonnetfile.json`, 'utf8'));
+    let gitSource = ""
+    jsonnetFile.dependencies.forEach(dep => {
+        if(dep.name == 'gitpod') {
+            dep.version = currentCommit
+            gitSource = dep.source.git.remote
+        }
+    });
+    fs.writeFileSync(`${pwd}/observability/jsonnetfile.json`, JSON.stringify(jsonnetFile));
+    exec(`cd observability && jb update ${gitSource}`, {slice: sliceName})
 
     let jsonnetRenderCmd = `cd observability && jsonnet -c -J vendor -m monitoring-satellite/manifests \
     --ext-str is_preview="true" \
