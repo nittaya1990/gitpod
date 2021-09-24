@@ -55,6 +55,7 @@ async function ensureCorrectInstallationOrder(){
     deployNodeExporter()
     deployKubeStateMetrics()
     deployGitpodServiceMonitors()
+    deployKubernetesServiceMonitors()
 }
 
 async function deployPrometheus() {
@@ -85,4 +86,9 @@ async function deployKubeStateMetrics() {
 async function deployGitpodServiceMonitors() {
     werft.log(sliceName, 'installing gitpod ServiceMonitor resources')
     exec('kubectl apply -f observability/monitoring-satellite/manifests/gitpod/', {silent: true})
+}
+
+async function deployKubernetesServiceMonitors() {
+    werft.log(sliceName, 'installing Kubernetes ServiceMonitor resources')
+    exec('kubectl apply -f observability/monitoring-satellite/manifests/kubernetes/', {silent: true})
 }
