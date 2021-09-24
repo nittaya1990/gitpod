@@ -18,7 +18,7 @@ setup-workspace:
 	go install github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb@master
 	go install github.com/google/go-jsonnet/cmd/jsonnet@master
 	go install github.com/google/go-jsonnet/cmd/jsonnetfmt@master
-	GO111MODULE=on go install github.com/prometheus/prometheus/cmd/promtool@release-2.26
+	GO111MODULE=on go get github.com/prometheus/prometheus/cmd/promtool@release-2.26
 	export PATH=$(PATH):$(PWD)/tmp/bin
 
 .PHONY: fmt
