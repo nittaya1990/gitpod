@@ -266,7 +266,7 @@ export interface ProviderRepository {
 export interface ClientHeaderFields{
     ip?:string;
     userAgent?:string;
-    dnt?:number;
+    dnt?:string;
     clientRegion?:string;
 }
 
