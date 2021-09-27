@@ -71,7 +71,7 @@ ENV LEEWAY_NESTED_WORKSPACE=true
 RUN cd /usr/bin && curl -fsSL https://github.com/gitpod-io/leeway/releases/download/v0.2.7/leeway_0.2.7_Linux_x86_64.tar.gz | tar xz
 
 # dazzle
-RUN cd /usr/bin && curl -fsSL https://github.com/32leaves/dazzle/releases/download/v0.0.3/dazzle_0.0.3_Linux_x86_64.tar.gz | tar xz
+RUN cd /usr/bin && rm -f LICENSE README.md && curl -fsSL https://github.com/32leaves/dazzle/releases/download/v0.0.3/dazzle_0.0.3_Linux_x86_64.tar.gz | tar xz
 
 # werft CLI
 ENV WERFT_K8S_NAMESPACE=werft
@@ -209,4 +209,5 @@ RUN go install github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb@master && \
 	go install github.com/google/go-jsonnet/cmd/jsonnetfmt@master && \
     curl -LO https://github.com/prometheus/prometheus/releases/download/v2.30.0/prometheus-2.30.0.linux-amd64.tar.gz && \
     tar -xzvf prometheus-2.30.0.linux-amd64.tar.gz && \
-    sudo mv prometheus-2.30.0.linux-amd64/promtool /usr/local/bin/promtool
+    sudo mv prometheus-2.30.0.linux-amd64/promtool /usr/local/bin/promtool && \
+    rm -rf prometheus-2.30.0.linux-amd64/
