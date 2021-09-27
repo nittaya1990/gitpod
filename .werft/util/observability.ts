@@ -1,4 +1,5 @@
 import { werft, exec } from './shell';
+import * as shell from 'shelljs';
 import * as fs from 'fs';
 
 /**
@@ -21,9 +22,6 @@ const sliceName = 'observability';
 export async function installMonitoringSatellite(params: InstallMonitoringSatelliteParams) {
     werft.log(sliceName, `Cloning observability repository - Branch: ${params.branch}`)
     exec(`git clone --branch ${params.branch} https://roboquat:$(cat /mnt/secrets/monitoring-satellite-preview-token/token)@github.com/gitpod-io/observability.git`, {silent: true})
-    werft.log(sliceName, 'installing jsonnet utility tools')
-    exec('cd observability && make setup-workspace', {silent: true})
-    werft.log(sliceName, 'rendering YAML files')
     let currentCommit = exec(`git rev-parse HEAD`, {silent: true}).stdout.trim()
     let pwd = exec(`pwd`, {silent: true}).stdout.trim()
     werft.log(sliceName, `Updating monitoring-satellite to latest commit SHA: ${currentCommit}`);
@@ -52,6 +50,7 @@ export async function installMonitoringSatellite(params: InstallMonitoringSatell
     monitoring-satellite/manifests/yaml-generator.jsonnet | xargs -I{} sh -c 'cat {} | gojsontoyaml > {}.yaml' -- {} && \
     find monitoring-satellite/manifests -type f ! -name '*.yaml' ! -name '*.jsonnet'  -delete`
 
+    werft.log(sliceName, 'rendering YAML files')
     exec(jsonnetRenderCmd, {silent: true})
     // The correct kubectl context should already be configured prior to this step
     ensureCorrectInstallationOrder()
@@ -109,4 +108,37 @@ async function deployGitpodServiceMonitors() {
 async function deployKubernetesServiceMonitors() {
     werft.log(sliceName, 'installing Kubernetes ServiceMonitor resources')
     exec('kubectl apply -f observability/monitoring-satellite/manifests/kubernetes/', {silent: true})
+}
+
+export function observabilityStaticChecks() {
+    werft.log(sliceName, 'installing binaries')
+    shell.cd('/workspace/operations/observability/mixins')
+    exec(`make setup-workspace`, {silent: true, dontCheckRc: true})
+
+    if (!jsonnetFmtCheck() || !prometheusRulesCheck()) {
+        throw new Error("Observability static checks failed!")
+    }
+}
+
+function jsonnetFmtCheck(): boolean {
+    werft.log(sliceName, "Checking if jsonnet compiles and is well formated")
+    let success = exec('make fmt', {slice: sliceName}).code == 0
+
+    if (!success) {
+        werft.log(sliceName, "Jsonnet linter failed. You can fix it by running 'cd operations/observability/mixins && make fmt'")
+    }
+    return success
+}
+
+function prometheusRulesCheck(): boolean {
+    werft.log(sliceName, "Checking if Prometheus rules are valid.")
+    let success = exec("make promtool-lint", {slice: sliceName}).code == 0
+
+    if (!success) {
+        const failedMessage = `Prometheus rule validation failed. For futher reference, please read:
+https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/
+https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/`
+        werft.log(sliceName, failedMessage)
+    }
+    return success
 }

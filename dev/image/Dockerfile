@@ -202,3 +202,11 @@ RUN sudo curl -fsSL https://uploader.codecov.io/latest/codecov-linux -o /usr/loc
 # Install pre-commit https://pre-commit.com/#install
 RUN sudo install-packages shellcheck \
     && sudo pip3 install pre-commit
+
+# Install observability-related binaries
+RUN go install github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb@master && \
+	go install github.com/google/go-jsonnet/cmd/jsonnet@master && \
+	go install github.com/google/go-jsonnet/cmd/jsonnetfmt@master && \
+    curl -LO https://github.com/prometheus/prometheus/releases/download/v2.30.0/prometheus-2.30.0.linux-amd64.tar.gz && \
+    tar -xzvf prometheus-2.30.0.linux-amd64.tar.gz && \
+    sudo mv prometheus-2.30.0.linux-amd64/promtool /usr/local/bin/promtool
