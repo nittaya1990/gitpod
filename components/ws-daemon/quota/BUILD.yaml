@@ -1,0 +1,10 @@
+packages:
+  - name: app
+    type: go
+    srcs:
+      - go.mod
+      - go.sum
+      - "**/*.go"
+    config:
+      packaging: app
+      buildCommand: ["go", "build", "-ldflags", "-w -extldflags \"-static\""]

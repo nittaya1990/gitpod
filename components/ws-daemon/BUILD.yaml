@@ -45,6 +45,7 @@ packages:
       - :app
       - :content-initializer
       - components/ws-daemon/nsinsider:app
+      - components/ws-daemon/quota:app
     argdeps:
       - imageRepoBase
     config:

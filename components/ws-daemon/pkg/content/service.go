@@ -14,7 +14,9 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -777,13 +779,29 @@ func workspaceLifecycleHooks(cfg Config, kubernetesNamespace string, workspaceEx
 		return nil
 	}
 
+	var installQuota = func(ctx context.Context, ws *session.Workspace) error {
+		base, err := os.Executable()
+		if err != nil {
+			return err
+		}
+
+		_, err = exec.Command(filepath.Join(filepath.Dir(base), "fsquota"), "--basePath", cfg.WorkingArea, "--dir", strings.TrimPrefix(strings.TrimPrefix(ws.Location, cfg.WorkingArea), "/"), "--size", strconv.FormatInt(int64(cfg.WorkspaceSizeLimit), 10)).CombinedOutput()
+		if err != nil {
+			if serr, ok := err.(*exec.ExitError); ok && serr.ExitCode() == 67 {
+				// filesystem does not support XFS/quotas. Let's not bother.
+			}
+			log.WithFields(ws.OWI()).WithError(err).Warn("cannot set workspace filesystem quota")
+		}
+		return nil
+	}
+
 	// startIWS starts the in-workspace service for a workspace. This lifecycle hook is idempotent, hence can - and must -
 	// be called on initialization and ready. The on-ready hook exists only to support ws-daemon restarts.
 	startIWS := iws.ServeWorkspace(uidmapper, api.FSShiftMethod(cfg.UserNamespaces.FSShift))
 
 	return map[session.WorkspaceState][]session.WorkspaceLivecycleHook{
-		session.WorkspaceInitializing: {setupWorkspace, startIWS},
-		session.WorkspaceReady:        {setupWorkspace, startIWS},
+		session.WorkspaceInitializing: {setupWorkspace, installQuota, startIWS},
+		session.WorkspaceReady:        {setupWorkspace, installQuota, startIWS},
 		session.WorkspaceDisposed:     {iws.StopServingWorkspace},
 	}
 }
