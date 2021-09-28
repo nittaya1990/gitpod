@@ -51,7 +51,7 @@ export async function installMonitoringSatellite(params: InstallMonitoringSatell
     find monitoring-satellite/manifests -type f ! -name '*.yaml' ! -name '*.jsonnet'  -delete`
 
     werft.log(sliceName, 'rendering YAML files')
-    exec(jsonnetRenderCmd, {slice: sliceName})
+    exec(jsonnetRenderCmd, {silent: true})
     // The correct kubectl context should already be configured prior to this step
     ensureCorrectInstallationOrder()
 }
@@ -78,13 +78,14 @@ async function ensureCorrectInstallationOrder(){
 async function deployPrometheus() {
     werft.log(sliceName, 'installing prometheus')
     exec('kubectl apply -f observability/monitoring-satellite/manifests/prometheus/', {silent: true})
-    exec('sleep 5 && kubectl rollout status statefulset prometheus-k8s', {slice: sliceName})
+    // Prometheus usually takes some time to be created. We sleep to give the operator some time
+    // to create the StatefulSet.
+    exec('sleep 20 && kubectl rollout status statefulset prometheus-k8s', {slice: sliceName})
 }
 
 async function deployGrafana() {
     werft.log(sliceName, 'installing grafana')
     exec('kubectl apply -f observability/monitoring-satellite/manifests/grafana/', {silent: true})
-    // We need to fix https://github.com/gitpod-io/observability/issues/258 first
     exec('kubectl rollout status deployment grafana', {slice: sliceName})
 }
 
@@ -120,7 +121,7 @@ export function observabilityStaticChecks() {
 
 function jsonnetFmtCheck(): boolean {
     werft.log(sliceName, "Checking if jsonnet compiles and is well formated")
-    let success = exec('make fmt', {slice: sliceName}).code == 0
+    let success = exec('make lint', {slice: sliceName}).code == 0
 
     if (!success) {
         werft.log(sliceName, "Jsonnet linter failed. You can fix it by running 'cd operations/observability/mixins && make fmt'")
