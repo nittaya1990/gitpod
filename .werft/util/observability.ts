@@ -51,7 +51,7 @@ export async function installMonitoringSatellite(params: InstallMonitoringSatell
     find monitoring-satellite/manifests -type f ! -name '*.yaml' ! -name '*.jsonnet'  -delete`
 
     werft.log(sliceName, 'rendering YAML files')
-    exec(jsonnetRenderCmd, {silent: true})
+    exec(jsonnetRenderCmd, {slice: sliceName})
     // The correct kubectl context should already be configured prior to this step
     ensureCorrectInstallationOrder()
 }
@@ -111,9 +111,7 @@ async function deployKubernetesServiceMonitors() {
 }
 
 export function observabilityStaticChecks() {
-    werft.log(sliceName, 'installing binaries')
     shell.cd('/workspace/operations/observability/mixins')
-    // exec(`make setup-workspace`, {silent: true, dontCheckRc: true})
 
     if (!jsonnetFmtCheck() || !prometheusRulesCheck()) {
         throw new Error("Observability static checks failed!")

@@ -219,3 +219,8 @@ RUN curl -LO https://github.com/google/go-jsonnet/releases/download/v${JSONNET_V
     tar -xzvf go-jsonnet_${JSONNET_VERSION}_Linux_x86_64.tar.gz && \
     sudo mv jsonnet /usr/local/bin/jsonnet && \
     sudo mv jsonnetfmt /usr/local/bin/jsonnetfmt
+
+ARG GOJSONTOYAML_VERSION="0.1.0"
+RUN curl -LO https://github.com/brancz/gojsontoyaml/releases/download/v${GOJSONTOYAML_VERSION}/gojsontoyaml_${GOJSONTOYAML_VERSION}_linux_amd64.tar.gz && \
+    tar -xzvf gojsontoyaml_${GOJSONTOYAML_VERSION}_linux_amd64.tar.gz && \
+    sudo mv gojsontoyaml /usr/local/bin/gojsontoyaml
