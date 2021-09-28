@@ -299,6 +299,21 @@ export class WorkspaceStarter {
             }
         }
 
+        const useDesktopIdeChoice = user.additionalData?.ideSettings?.useDesktopIde || false;
+        if (useDesktopIdeChoice) {
+            const desktopIdeChoice = user.additionalData?.ideSettings?.defaultDesktopIde;
+            if (!!desktopIdeChoice) {
+                const mappedImage = ideConfig.desktopIdeImageAliases[desktopIdeChoice];
+                if (!!mappedImage) {
+                    configuration.desktopIdeImage = mappedImage;
+                } else if (this.authService.hasPermission(user, "ide-settings")) {
+                    // if the IDE choice isn't one of the preconfiured choices, we assume its the image name.
+                    // For now, this feature requires special permissions.
+                    configuration.desktopIdeImage = desktopIdeChoice;
+                }
+            }
+        }
+
         let featureFlags: NamedWorkspaceFeatureFlag[] = workspace.config._featureFlags || [];
         featureFlags = featureFlags.concat(this.config.workspaceDefaults.defaultFeatureFlags);
         if (user.featureFlags && user.featureFlags.permanentWSFeatureFlags) {
@@ -613,6 +628,13 @@ export class WorkspaceStarter {
         vsxRegistryUrl.setValue(this.config.vsxRegistryUrl);
         envvars.push(vsxRegistryUrl);
 
+        if (ideConfig.ideaIUURL) {
+            const ideaIUURL = new EnvironmentVariable();
+            vsxRegistryUrl.setName("IDEA_IU_URL");
+            vsxRegistryUrl.setValue(ideConfig.ideaIUURL);
+            envvars.push(ideaIUURL);
+        }
+
         const createGitpodTokenPromise = (async () => {
             const scopes = this.createDefaultGitpodAPITokenScopes(workspace, instance);
             const token = crypto.randomBytes(30).toString('hex');
@@ -700,6 +722,7 @@ export class WorkspaceStarter {
         spec.setPortsList(ports);
         spec.setInitializer((await initializerPromise).initializer);
         spec.setIdeImage(ideImage);
+        spec.setDesktopIdeImage(instance.configuration?.desktopIdeImage || "");
         spec.setWorkspaceImage(instance.workspaceImage);
         spec.setWorkspaceLocation(workspace.config.workspaceLocation || spec.getCheckoutLocation());
         spec.setFeatureFlagsList(this.toWorkspaceFeatureFlags(featureFlags));

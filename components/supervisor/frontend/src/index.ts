@@ -30,6 +30,8 @@ IDEWebSocket.install();
 const ideService = IDEFrontendService.create();
 const pendingGitpodServiceClient = GitpodServiceClient.create();
 const loadingIDE = new Promise(resolve => window.addEventListener('DOMContentLoaded', resolve, { once: true }));
+const toStop = new DisposableCollection();
+
 (async () => {
     const gitpodServiceClient = await pendingGitpodServiceClient;
 
@@ -53,21 +55,23 @@ const loadingIDE = new Promise(resolve => window.addEventListener('DOMContentLoa
             });
         });
     }
-    const supervisorServiceClinet = new SupervisorServiceClient(gitpodServiceClient);
-    await Promise.all([supervisorServiceClinet.ideReady, supervisorServiceClinet.contentReady, loadingIDE]);
+    const supervisorServiceClient = new SupervisorServiceClient(gitpodServiceClient);
+    const [ideStatus] = await Promise.all([supervisorServiceClient.ideReady, supervisorServiceClient.contentReady, loadingIDE]);
     if (isWorkspaceInstancePhase('stopping') || isWorkspaceInstancePhase('stopped')) {
         return;
     }
-    const toStop = new DisposableCollection();
     toStop.pushAll([
         IDEWebSocket.connectWorkspace(),
-        ideService.start(),
         gitpodServiceClient.onDidChangeInfo(() => {
             if (isWorkspaceInstancePhase('stopping') || isWorkspaceInstancePhase('stopped')) {
                 toStop.dispose();
             }
         })
     ]);
+    const isDesktopIde = ideStatus && ideStatus.desktopIdeInfo && ideStatus.desktopIdeInfo.actionLink;
+    if (!isDesktopIde) {
+        toStop.push(ideService.start());
+    }
     //#endregion
 })();
 
@@ -83,14 +87,56 @@ const loadingIDE = new Promise(resolve => window.addEventListener('DOMContentLoa
         return;
     }
 
+    const supervisorServiceClient = new SupervisorServiceClient(gitpodServiceClient);
+
+    var desktopIdeDiv: HTMLElement | undefined = undefined;
+    var hideDesktopIde = false;
+    const createDesktopIdeDiv = (info: { actionLink: string, actionLabel?: string }) => {
+        const desktopIdeDiv = document.createElement("div");
+        desktopIdeDiv.className = "gitpod-frame";
+        desktopIdeDiv.style.visibility = 'hidden';
+        desktopIdeDiv.style.zIndex = "9999";
+        desktopIdeDiv.style.background = "white";
+        desktopIdeDiv.style.padding = "10rem";
+        document.body.appendChild(desktopIdeDiv);
+
+        const actionLink = document.createElement("a");
+        actionLink.href = info.actionLink;
+        actionLink.innerText = info.actionLabel || "Open IDE";
+        desktopIdeDiv.appendChild(actionLink);
+
+        const openWebIdeButton = document.createElement("button");
+        openWebIdeButton.innerText = "Open Web IDE";
+        openWebIdeButton.onclick = () => {
+            console.log("open web IDE");
+            hideDesktopIde = true;
+            toStop.push(ideService.start());
+        };
+        desktopIdeDiv.appendChild(openWebIdeButton);
+        return desktopIdeDiv;
+    };
+
     //#region current-frame
     let current: HTMLElement = loading.frame;
     let stopped = false;
-    const nextFrame = () => {
+    const nextFrame = async () => {
         const instance = gitpodServiceClient.info.latestInstance;
         if (instance) {
-            if (instance.status.phase === 'running' && ideService.state === 'ready') {
-                return document.body;
+            if (instance.status.phase === 'running') {
+                if (!hideDesktopIde) {
+                    const ideStatus = await supervisorServiceClient.ideReady;
+                    const isDesktopIde = ideStatus && ideStatus.desktopIdeInfo && ideStatus.desktopIdeInfo.actionLink;
+                    if (isDesktopIde) {
+                        if (!desktopIdeDiv) {
+                            desktopIdeDiv = createDesktopIdeDiv(ideStatus.desktopIdeInfo);
+                            window.open(ideStatus.desktopIdeInfo.actionLink);
+                        }
+                        return desktopIdeDiv;
+                    }
+                }
+                if (ideService.state === 'ready') {
+                    return document.body;
+                }
             }
             if (instance.status.phase === 'stopped') {
                 stopped = true;
@@ -108,8 +154,8 @@ const loadingIDE = new Promise(resolve => window.addEventListener('DOMContentLoa
         }
         return loading.frame;
     }
-    const updateCurrentFrame = () => {
-        const newCurrent = nextFrame();
+    const updateCurrentFrame = async () => {
+        const newCurrent = await nextFrame();
         if (current === newCurrent) {
             return;
         }
@@ -152,7 +198,7 @@ const loadingIDE = new Promise(resolve => window.addEventListener('DOMContentLoa
         trackStatusRenderedEvent(`ide-${ideService.state}`, error);
     }
 
-    updateCurrentFrame();
+    await updateCurrentFrame();
     updateLoadingState();
     trackIDEStatusRenderedEvent();
     gitpodServiceClient.onDidChangeInfo(() => updateCurrentFrame());

@@ -1,0 +1,10 @@
+{
+    "entrypoint": "/ide-desktop/startup.sh",
+    "readinessProbe": {
+        "type": "http",
+        "http": {
+            "port": 24000,
+            "path": "/status"
+        }
+      }
+}
