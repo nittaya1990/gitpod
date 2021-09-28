@@ -113,7 +113,7 @@ async function deployKubernetesServiceMonitors() {
 export function observabilityStaticChecks() {
     werft.log(sliceName, 'installing binaries')
     shell.cd('/workspace/operations/observability/mixins')
-    exec(`make setup-workspace`, {silent: true, dontCheckRc: true})
+    // exec(`make setup-workspace`, {silent: true, dontCheckRc: true})
 
     if (!jsonnetFmtCheck() || !prometheusRulesCheck()) {
         throw new Error("Observability static checks failed!")
