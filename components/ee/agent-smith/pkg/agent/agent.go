@@ -488,12 +488,14 @@ func (agent *Smith) scanPs(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	log.Debugf("listed containers (%d)", len(wss))
 
 	// run ps and parse a ProcessMap
 	ps, err := RunPs()
 	if err != nil {
 		return err
 	}
+	log.Debugf("runps (%d)", len(*ps.List()))
 
 	// parse output and send actual scan closure over to scanProcessQueue
 	for _, ws := range wss {

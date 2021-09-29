@@ -15,7 +15,6 @@ import (
 	"github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/api/services/tasks/v1"
 	"github.com/containerd/containerd/api/types"
-	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/typeurl"
@@ -243,6 +242,7 @@ func (s *Containerd) handleNewContainer(c containers.Container) {
 
 		s.cntIdx[c.ID] = info
 		log.WithField("podname", podName).WithFields(log.OWI(info.OwnerID, info.WorkspaceID, info.InstanceID)).WithField("ID", c.ID).Debug("found workspace container - updating label cache")
+
 	}
 }
 
@@ -466,45 +466,53 @@ func (s *Containerd) IsContainerdReady(ctx context.Context) (bool, error) {
 
 // ListWorkspaceContainers returns a list of running workspace containers
 func (s *Containerd) ListWorkspaceContainers(ctx context.Context) ([]*WorkspaceContainerInfo, error) {
-	taskMap := make(map[string]*task.Process)
-	resp, err := s.Client.TaskService().List(ctx, &tasks.ListTasksRequest{})
-	if err != nil {
-		return nil, err
-	}
-	for _, t := range resp.Tasks {
-		if t.Status != task.StatusRunning {
-			continue
-		}
-		tt := t
-		taskMap[t.ContainerID] = tt
-	}
+	// taskMap := make(map[string]*task.Process)
+	// resp, err := s.Client.TaskService().List(ctx, &tasks.ListTasksRequest{})
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// for _, t := range resp.Tasks {
+	// 	if t.Status != task.StatusRunning {
+	// 		continue
+	// 	}
+	// 	tt := t
+	// 	taskMap[t.ContainerID] = tt
+	// }
 
-	cs, err := s.Client.ContainerService().List(ctx)
-	if err != nil {
-		return nil, err
-	}
+	// cs, err := s.Client.ContainerService().List(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	wscs := make([]*WorkspaceContainerInfo, 0)
-	wscMap := make(map[ID]*WorkspaceContainerInfo)
-	for _, c := range cs {
-		if !isWorkspaceContainerShim(c) {
-			continue
-		}
-
-		t, ok := taskMap[c.ID]
-		if !ok {
-			// might very well happen, we don't care that much
-			continue
-		}
-
+	for _, wsInfo := range s.wsiIdx {
 		wsc := WorkspaceContainerInfo{
-			ID:         ID(c.ID),
-			PID:        uint64(t.Pid),
-			InstanceID: c.Labels[wsk8s.WorkspaceIDLabel],
+			ID:         ID(wsInfo.ID),
+			PID:        uint64(wsInfo.PID),
+			InstanceID: wsInfo.InstanceID,
 		}
-		wscMap[wsc.ID] = &wsc
 		wscs = append(wscs, &wsc)
 	}
+	// wscMap := make(map[ID]*WorkspaceContainerInfo)
+	// for _, c := range cs {
+	// 	if !isWorkspaceContainerShim(c) {
+	// 		continue
+	// 	}
+
+	// 	t, ok := taskMap[c.ID]
+	// 	if !ok {
+	// 		// might very well happen, we don't care that much
+	// 		continue
+	// 	}
+
+	// 	wsc := WorkspaceContainerInfo{
+	// 		ID:         ID(c.ID),
+	// 		PID:        uint64(t.Pid),
+	// 		InstanceID: c.Labels[wsk8s.WorkspaceIDLabel],
+	// 	}
+	// 	wscMap[wsc.ID] = &wsc
+	// 	wscs = append(wscs, &wsc)
+	// }
 
 	return wscs, nil
 }

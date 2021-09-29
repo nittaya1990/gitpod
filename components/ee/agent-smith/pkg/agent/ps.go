@@ -38,6 +38,8 @@ func (m *ProcessMap) Insert(pid uint64, ppid uint64, filename string, args strin
 	p, alreadyPresent := m.pmap[pid]
 	if alreadyPresent {
 		p.PPID = ppid
+		p.Filename = filename
+		p.Args = args
 		return p
 	}
 
