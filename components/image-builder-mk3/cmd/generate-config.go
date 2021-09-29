@@ -9,6 +9,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gitpod-io/gitpod/image-builder/pkg/config"
 
 	"github.com/alecthomas/jsonschema"
 	"github.com/spf13/cobra"
@@ -30,7 +31,7 @@ var generateConfigCmd = &cobra.Command{
 	Short: "Generates JSON schema for the configuration",
 
 	Run: func(cmd *cobra.Command, args []string) {
-		schema := jsonschema.Reflect(&config{})
+		schema := jsonschema.Reflect(&config.Config{})
 		schema.Title = "image-builder config schema - generated using img generate config"
 		out, err := json.MarshalIndent(schema, "", "  ")
 		if err != nil {

@@ -77,15 +77,17 @@ type Configuration struct {
 	BuilderAuthKeyFile string `json:"builderAuthKeyFile,omitempty"`
 }
 
+type TLS struct {
+	Authority   string `json:"ca"`
+	Certificate string `json:"crt"`
+	PrivateKey  string `json:"key"`
+}
+
 // WorkspaceManagerConfig configures the workspace manager connection
 type WorkspaceManagerConfig struct {
-	Address string `json:"address"`
-	TLS     struct {
-		Authority   string `json:"ca"`
-		Certificate string `json:"crt"`
-		PrivateKey  string `json:"key"`
-	} `json:"tls,omitempty"`
-	Client wsmanapi.WorkspaceManagerClient `json:"-"`
+	Address string                          `json:"address"`
+	TLS     TLS                             `json:"tls,omitempty"`
+	Client  wsmanapi.WorkspaceManagerClient `json:"-"`
 }
 
 // NewOrchestratingBuilder creates a new orchestrating image builder
