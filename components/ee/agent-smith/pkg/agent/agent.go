@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gitpod-io/gitpod/agent-smith/pkg/bpf"
 	"github.com/gitpod-io/gitpod/agent-smith/pkg/signature"
 	"github.com/gitpod-io/gitpod/common-go/log"
 	"github.com/gitpod-io/gitpod/common-go/util"
@@ -375,12 +374,14 @@ func (er EnforcementRules) Validate() error {
 
 // Start gets a stream of Infringements from Run and executes a callback on them to apply a Penalty
 func (agent *Smith) Start(ctx context.Context, callback func(InfringingWorkspace, []PenaltyKind)) {
-	// todo(fntlnz): do the bpf loading here before running Run so that we have everything sorted out
-	abpf, err := bpf.LoadAndAttach(agent.Config.ProbePath)
-	if err != nil {
-		log.WithError(err).Fatal("error while loading and attaching bpf program")
-	}
-	defer abpf.Close()
+	// // todo(fntlnz): do the bpf loading here before running Run so that we have everything sorted out
+	// abpf, err := bpf.LoadAndAttach(agent.Config.ProbePath)
+	// if err != nil {
+	// 	log.WithError(err).Fatal("error while loading and attaching bpf program")
+	// }
+	// defer abpf.Close()
+
+	log.Debug("starting")
 
 	egressTicker := time.NewTicker(30 * time.Second)
 	psScanTicker := time.NewTicker(5 * time.Second)
@@ -455,7 +456,7 @@ func (agent *Smith) Start(ctx context.Context, callback func(InfringingWorkspace
 			log.Info("agent stopped")
 			break
 		case <-psScanTicker.C:
-			err = agent.scanPs(ctx)
+			err := agent.scanPs(ctx)
 			if err != nil {
 				log.WithError(err).Error("error scanning ps in workspaces")
 			}
@@ -477,6 +478,7 @@ func (agent *Smith) Start(ctx context.Context, callback func(InfringingWorkspace
 }
 
 func (agent *Smith) scanPs(ctx context.Context) error {
+	log.Debugf("scanning ps")
 	if agent.Config.Container == nil {
 		return nil
 	}
