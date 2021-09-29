@@ -5,21 +5,29 @@
  */
 
 import { useState } from "react";
+import { useLocation } from "react-router";
 import ConfirmationModal from "../components/ConfirmationModal";
 import { PageWithSubMenu } from "../components/PageWithSubMenu";
-import settingsMenu from "./team-settings-menu";
 
 function TeamSettings() {
     const [modal, setModal] = useState(false);
     const close = () => setModal(false);
+    const location = useLocation();
 
     const deleteTeam = async () => {
         console.log("clicked delete");
     };
 
-    return <div>
+    const settingsMenu = [
+        {
+            title: 'General',
+            link: [location.pathname]
+        }
+    ]
+
+    return <>
         <PageWithSubMenu subMenu={settingsMenu} title='General' subtitle='Manage general team settings.'>
-            <h3 className="mt-12">Delete Team</h3>
+            <h3>Delete Team</h3>
             <p className="text-base text-gray-500 pb-4">Deleting this team will also remove all associated data with this team, including projects and workspaces. Deleted teams cannot be restored!</p>
             <button className="danger secondary" onClick={() => setModal(true)}>Delete Account</button>
         </PageWithSubMenu>
@@ -38,7 +46,7 @@ function TeamSettings() {
                 <li className="ml-5">All members of this team will loose access to this team, associated projects and workspaces.</li>
             </ol>
         </ConfirmationModal>
-    </div>
+    </>
 }
 
 export default TeamSettings;
