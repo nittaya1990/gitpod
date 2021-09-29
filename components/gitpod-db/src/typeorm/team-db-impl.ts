@@ -145,11 +145,15 @@ export class TeamDBImpl implements TeamDB {
         return team;
     }
 
-    public async deleteTeam(userId: string, teamId: string): Promise<void> {
+    public async deleteTeam(teamId: string): Promise<void> {
         const teamRepo = await this.getTeamRepo();
         const team = await this.findTeamById(teamId);
+        // const projects = await this.findTeamProjects(teamId);
+        // projects.forEach(project => {
+            // const workspaces = await this.findAllWorkspaces(projectId);
+        // })
         if (team) {
-            team.deleted = true;
+            team.softDeleted = true;
             await teamRepo.save(team);
         }
     }

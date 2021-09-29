@@ -18,5 +18,5 @@ export interface TeamDB {
     findTeamMembershipInviteById(inviteId: string): Promise<TeamMembershipInvite>;
     findGenericInviteByTeamId(teamId: string): Promise<TeamMembershipInvite | undefined>;
     resetGenericInvite(teamId: string): Promise<TeamMembershipInvite>;
-    deleteTeam(userId: string, teamId: string): Promise<void>;
+    deleteTeam(teamId: string): Promise<void>;
 }

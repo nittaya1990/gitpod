@@ -4,19 +4,37 @@
  * See License-AGPL.txt in the project root for license information.
  */
 
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { useLocation } from "react-router";
 import ConfirmationModal from "../components/ConfirmationModal";
 import { PageWithSubMenu } from "../components/PageWithSubMenu";
+import { getGitpodService, gitpodHostUrl } from "../service/service";
+import { getCurrentTeam, TeamsContext } from "./teams-context";
 
-function TeamSettings() {
+export default function TeamSettings() {
     const [modal, setModal] = useState(false);
-    const close = () => setModal(false);
+    const { teams } = useContext(TeamsContext);
     const location = useLocation();
+    const team = getCurrentTeam(location, teams);
+
+    const close = () => setModal(false);
 
     const deleteTeam = async () => {
-        console.log("clicked delete");
+        if (!team) {
+            return
+        }
+        await getGitpodService().server.deleteTeam(team.id);
+        document.location.href = gitpodHostUrl.asSettings().toString();
     };
+
+        // const getProjects = async () => {
+    //     if (!team) {
+    //         return
+    //     }
+    //     return (await getGitpodService().server.getTeamProjects(team.id)).length;
+    // }
+
+    // const numberOfProjects = getProjects();
 
     const settingsMenu = [
         {
@@ -48,5 +66,3 @@ function TeamSettings() {
         </ConfirmationModal>
     </>
 }
-
-export default TeamSettings;

@@ -687,6 +687,7 @@ export abstract class AbstractTypeORMWorkspaceDBImpl implements WorkspaceDB {
         orderBy: keyof Workspace,
         orderDir: "ASC" | "DESC",
         ownerId?: string,
+        projectId?: string,
         searchTerm?: string,
         minCreationTime?: Date,
         maxCreationTime?: Date,
@@ -700,6 +701,9 @@ export abstract class AbstractTypeORMWorkspaceDBImpl implements WorkspaceDB {
             .where("ws.type = :type", { type: type ? type.toString() : "regular" }); // only regular workspaces by default
         if (ownerId) {
             queryBuilder.andWhere("ownerId = :ownerId", { ownerId });
+        }
+        if (projectId) {
+            queryBuilder.andWhere("projectId = :projectId", { projectId})
         }
         if (searchTerm) {
             queryBuilder.andWhere("(contextURL LIKE :searchTerm OR description LIKE :searchTerm)", { searchTerm });
