@@ -1,6 +1,6 @@
-// Copyright (c) 2021 Gitpod GmbH. All rights reserved.
-// Licensed under the Gitpod Enterprise Source Code License,
-// See License.enterprise.txt in the project root folder.
+// Copyright (c) 2022 Gitpod GmbH. All rights reserved.
+// Licensed under the GNU Affero General Public License (AGPL).
+// See License.AGPL.txt in the project root for license information.
 
 package detector
 
@@ -171,7 +171,7 @@ func (p realProcfs) Environ(pid int) ([]string, error) {
 }
 
 func parseGitpodEnviron(r io.Reader) ([]string, error) {
-	// Note: this function is benchmarked in BenchmarkParseGitPodEnviron.
+	// Note: this function is benchmarked in BenchmarkParseGitpodEnviron.
 	//       At the time of this wriging it consumed 3+N allocs where N is the number of
 	//       env vars starting with GITPOD_.
 	//
@@ -251,6 +251,7 @@ type ProcfsDetector struct {
 
 	indexSizeGuage     prometheus.Gauge
 	cacheUseCounterVec *prometheus.CounterVec
+	workspaceGauge     prometheus.Gauge
 
 	startOnce sync.Once
 
@@ -282,6 +283,12 @@ func NewProcfsDetector() (*ProcfsDetector, error) {
 			Name:      "cache_use_total",
 			Help:      "process cache statistics",
 		}, []string{"use"}),
+		workspaceGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: "gitpod",
+			Subsystem: "agent_smith_procfs_detector",
+			Name:      "workspace_count",
+			Help:      "number of detected workspaces",
+		}),
 		proc:  realProcfs(p),
 		cache: cache,
 	}, nil
@@ -290,11 +297,13 @@ func NewProcfsDetector() (*ProcfsDetector, error) {
 func (det *ProcfsDetector) Describe(d chan<- *prometheus.Desc) {
 	det.indexSizeGuage.Describe(d)
 	det.cacheUseCounterVec.Describe(d)
+	det.workspaceGauge.Describe(d)
 }
 
 func (det *ProcfsDetector) Collect(m chan<- prometheus.Metric) {
 	det.indexSizeGuage.Collect(m)
 	det.cacheUseCounterVec.Collect(m)
+	det.workspaceGauge.Collect(m)
 }
 
 func (det *ProcfsDetector) start() {
@@ -344,13 +353,20 @@ func (det *ProcfsDetector) run(processes chan<- Process) {
 	// let's find all workspaces, from the root down
 	findWorkspaces(det.proc, root, 0, nil)
 
+	workspaces := 0
 	for _, p := range idx {
 		if p.Workspace == nil {
 			continue
 		}
+
+		if p.Kind == ProcessSandbox {
+			workspaces = workspaces + 1
+		}
+
 		if p.Kind != ProcessUserWorkload {
 			continue
 		}
+
 		if _, ok := det.cache.Get(p.Hash); ok {
 			det.cacheUseCounterVec.WithLabelValues("hit").Inc()
 			continue
@@ -367,6 +383,8 @@ func (det *ProcfsDetector) run(processes chan<- Process) {
 		log.WithField("proc", proc).Debug("found process")
 		processes <- proc
 	}
+
+	det.workspaceGauge.Set(float64(workspaces))
 }
 
 func findWorkspaces(proc discoverableProcFS, p *process, d int, ws *common.Workspace) {
@@ -377,7 +395,7 @@ func findWorkspaces(proc discoverableProcFS, p *process, d int, ws *common.Works
 
 		if len(p.Cmdline) >= 2 && p.Cmdline[0] == "/proc/self/exe" && p.Cmdline[1] == "ring1" {
 			// we've potentially found a workspacekit process, and expect it's one child to a be a supervisor process
-			if len(p.Children) == 1 {
+			if len(p.Children) > 0 {
 				c := p.Children[0]
 
 				if isSupervisor(c.Cmdline) {
@@ -407,7 +425,7 @@ func findWorkspaces(proc discoverableProcFS, p *process, d int, ws *common.Works
 }
 
 func isSupervisor(cmdline []string) bool {
-	return len(cmdline) == 2 && cmdline[0] == "supervisor" && cmdline[1] == "run"
+	return len(cmdline) == 2 && cmdline[0] == "supervisor" && cmdline[1] == "init"
 }
 
 func extractWorkspaceFromWorkspacekit(proc discoverableProcFS, pid int) *common.Workspace {

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright (c) 2021 Gitpod GmbH. All rights reserved.
 # Licensed under the GNU Affero General Public License (AGPL).
-# See License-AGPL.txt in the project root for license information.
+# See License.AGPL.txt in the project root for license information.
 
 # This scipt connects via Google's cloud_sql_proxy to a database and runs the db-migrations
 
@@ -18,8 +18,5 @@
 #            gcr.io/gitpod-core-dev/build/db-migrations:x1 /app/migrate_gcp.sh
 
 set -euo pipefail
-
-# migrate 'migrations' table
-yarn --cwd /app/node_modules/@gitpod/gitpod-db run migrate-migrations
 
 /app/typeorm_gcp.sh migrations:run

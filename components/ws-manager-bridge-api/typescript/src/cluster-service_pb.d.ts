@@ -1,7 +1,7 @@
 /**
- * Copyright (c) 2021 Gitpod GmbH. All rights reserved.
+ * Copyright (c) 2023 Gitpod GmbH. All rights reserved.
  * Licensed under the GNU Affero General Public License (AGPL).
- * See License-AGPL.txt in the project root for license information.
+ * See License.AGPL.txt in the project root for license information.
  */
 
 // package: workspacemanagerbridge
@@ -31,10 +31,8 @@ export class RegisterRequest extends jspb.Message {
     getAdmissionConstraintsList(): Array<AdmissionConstraint>;
     setAdmissionConstraintsList(value: Array<AdmissionConstraint>): RegisterRequest;
     addAdmissionConstraints(value?: AdmissionConstraint, index?: number): AdmissionConstraint;
-    clearAdmissionPreferenceList(): void;
-    getAdmissionPreferenceList(): Array<AdmissionPreference>;
-    setAdmissionPreferenceList(value: Array<AdmissionPreference>): RegisterRequest;
-    addAdmissionPreference(value?: AdmissionPreference, index?: number): AdmissionPreference;
+    getRegion(): string;
+    setRegion(value: string): RegisterRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): RegisterRequest.AsObject;
@@ -53,7 +51,7 @@ export namespace RegisterRequest {
         tls?: TlsConfig.AsObject,
         hints?: RegistrationHints.AsObject,
         admissionConstraintsList: Array<AdmissionConstraint.AsObject>,
-        admissionPreferenceList: Array<AdmissionPreference.AsObject>,
+        region: string,
     }
 }
 
@@ -105,8 +103,6 @@ export class RegistrationHints extends jspb.Message {
     setPerfereability(value: Preferability): RegistrationHints;
     getCordoned(): boolean;
     setCordoned(value: boolean): RegistrationHints;
-    getGovern(): boolean;
-    setGovern(value: boolean): RegistrationHints;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): RegistrationHints.AsObject;
@@ -122,7 +118,6 @@ export namespace RegistrationHints {
     export type AsObject = {
         perfereability: Preferability,
         cordoned: boolean,
-        govern: boolean,
     }
 }
 
@@ -137,11 +132,6 @@ export class AdmissionConstraint extends jspb.Message {
     clearHasPermission(): void;
     getHasPermission(): AdmissionConstraint.HasPermission | undefined;
     setHasPermission(value?: AdmissionConstraint.HasPermission): AdmissionConstraint;
-
-    hasHasUserLevel(): boolean;
-    clearHasUserLevel(): void;
-    getHasUserLevel(): string;
-    setHasUserLevel(value: string): AdmissionConstraint;
 
     getConstraintCase(): AdmissionConstraint.ConstraintCase;
 
@@ -159,7 +149,6 @@ export namespace AdmissionConstraint {
     export type AsObject = {
         hasFeaturePreview?: AdmissionConstraint.FeaturePreview.AsObject,
         hasPermission?: AdmissionConstraint.HasPermission.AsObject,
-        hasUserLevel: string,
     }
 
 
@@ -205,38 +194,6 @@ export namespace AdmissionConstraint {
         CONSTRAINT_NOT_SET = 0,
         HAS_FEATURE_PREVIEW = 1,
         HAS_PERMISSION = 2,
-        HAS_USER_LEVEL = 3,
-    }
-
-}
-
-export class AdmissionPreference extends jspb.Message {
-
-    hasUserLevel(): boolean;
-    clearUserLevel(): void;
-    getUserLevel(): string;
-    setUserLevel(value: string): AdmissionPreference;
-
-    getPreferenceCase(): AdmissionPreference.PreferenceCase;
-
-    serializeBinary(): Uint8Array;
-    toObject(includeInstance?: boolean): AdmissionPreference.AsObject;
-    static toObject(includeInstance: boolean, msg: AdmissionPreference): AdmissionPreference.AsObject;
-    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
-    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
-    static serializeBinaryToWriter(message: AdmissionPreference, writer: jspb.BinaryWriter): void;
-    static deserializeBinary(bytes: Uint8Array): AdmissionPreference;
-    static deserializeBinaryFromReader(message: AdmissionPreference, reader: jspb.BinaryReader): AdmissionPreference;
-}
-
-export namespace AdmissionPreference {
-    export type AsObject = {
-        userLevel: string,
-    }
-
-    export enum PreferenceCase {
-        PREFERENCE_NOT_SET = 0,
-        USER_LEVEL = 1,
     }
 
 }
@@ -258,12 +215,10 @@ export class ClusterStatus extends jspb.Message {
     getAdmissionConstraintList(): Array<AdmissionConstraint>;
     setAdmissionConstraintList(value: Array<AdmissionConstraint>): ClusterStatus;
     addAdmissionConstraint(value?: AdmissionConstraint, index?: number): AdmissionConstraint;
-    clearAdmissionPreferenceList(): void;
-    getAdmissionPreferenceList(): Array<AdmissionPreference>;
-    setAdmissionPreferenceList(value: Array<AdmissionPreference>): ClusterStatus;
-    addAdmissionPreference(value?: AdmissionPreference, index?: number): AdmissionPreference;
     getStatic(): boolean;
     setStatic(value: boolean): ClusterStatus;
+    getRegion(): string;
+    setRegion(value: string): ClusterStatus;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): ClusterStatus.AsObject;
@@ -284,8 +239,8 @@ export namespace ClusterStatus {
         maxScore: number,
         governed: boolean,
         admissionConstraintList: Array<AdmissionConstraint.AsObject>,
-        admissionPreferenceList: Array<AdmissionPreference.AsObject>,
         pb_static: boolean,
+        region: string,
     }
 }
 
@@ -313,11 +268,6 @@ export class UpdateRequest extends jspb.Message {
     getAdmissionConstraint(): ModifyAdmissionConstraint | undefined;
     setAdmissionConstraint(value?: ModifyAdmissionConstraint): UpdateRequest;
 
-    hasAdmissionPreference(): boolean;
-    clearAdmissionPreference(): void;
-    getAdmissionPreference(): ModifyAdmissionPreference | undefined;
-    setAdmissionPreference(value?: ModifyAdmissionPreference): UpdateRequest;
-
     getPropertyCase(): UpdateRequest.PropertyCase;
 
     serializeBinary(): Uint8Array;
@@ -337,7 +287,6 @@ export namespace UpdateRequest {
         maxScore: number,
         cordoned: boolean,
         admissionConstraint?: ModifyAdmissionConstraint.AsObject,
-        admissionPreference?: ModifyAdmissionPreference.AsObject,
     }
 
     export enum PropertyCase {
@@ -346,7 +295,6 @@ export namespace UpdateRequest {
         MAX_SCORE = 3,
         CORDONED = 4,
         ADMISSION_CONSTRAINT = 5,
-        ADMISSION_PREFERENCE = 6,
     }
 
 }
@@ -377,32 +325,6 @@ export namespace ModifyAdmissionConstraint {
     }
 }
 
-export class ModifyAdmissionPreference extends jspb.Message {
-    getAdd(): boolean;
-    setAdd(value: boolean): ModifyAdmissionPreference;
-
-    hasPreference(): boolean;
-    clearPreference(): void;
-    getPreference(): AdmissionPreference | undefined;
-    setPreference(value?: AdmissionPreference): ModifyAdmissionPreference;
-
-    serializeBinary(): Uint8Array;
-    toObject(includeInstance?: boolean): ModifyAdmissionPreference.AsObject;
-    static toObject(includeInstance: boolean, msg: ModifyAdmissionPreference): ModifyAdmissionPreference.AsObject;
-    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
-    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
-    static serializeBinaryToWriter(message: ModifyAdmissionPreference, writer: jspb.BinaryWriter): void;
-    static deserializeBinary(bytes: Uint8Array): ModifyAdmissionPreference;
-    static deserializeBinaryFromReader(message: ModifyAdmissionPreference, reader: jspb.BinaryReader): ModifyAdmissionPreference;
-}
-
-export namespace ModifyAdmissionPreference {
-    export type AsObject = {
-        add: boolean,
-        preference?: AdmissionPreference.AsObject,
-    }
-}
-
 export class UpdateResponse extends jspb.Message {
 
     serializeBinary(): Uint8Array;
@@ -423,6 +345,8 @@ export namespace UpdateResponse {
 export class DeregisterRequest extends jspb.Message {
     getName(): string;
     setName(value: string): DeregisterRequest;
+    getForce(): boolean;
+    setForce(value: boolean): DeregisterRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): DeregisterRequest.AsObject;
@@ -437,6 +361,7 @@ export class DeregisterRequest extends jspb.Message {
 export namespace DeregisterRequest {
     export type AsObject = {
         name: string,
+        force: boolean,
     }
 }
 

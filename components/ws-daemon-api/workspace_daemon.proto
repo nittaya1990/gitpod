@@ -17,6 +17,11 @@ service InWorkspaceService {
     // for user namespaces and is available four times every 10 seconds.
     rpc WriteIDMapping(WriteIDMappingRequest) returns (WriteIDMappingResponse) {}
 
+    // EvacuateCGroup empties the workspace pod cgroup and produces a new substructure.
+    // In combincation with introducing a new cgroup namespace, we can create a situation
+    // where the subcontroller are enabled and the ring2-visible cgroup is of type "domain".
+    rpc EvacuateCGroup(EvacuateCGroupRequest) returns (EvacuateCGroupResponse) {}
+
     // MountProc mounts a masked proc in the container's rootfs.
     // The PID must be in the PID namespace of the workspace container.
     // The path is relative to the mount namespace of the PID.
@@ -40,19 +45,33 @@ service InWorkspaceService {
     // Teardown prepares workspace content backups and unmounts shiftfs mounts. The canary is supposed to be triggered
     // when the workspace is about to shut down, e.g. using the PreStop hook of a Kubernetes container.
     rpc Teardown(TeardownRequest) returns (TeardownResponse) {}
+
+    // Set up a pair of veths that interconnect the specified PID and the workspace container's network namespace.
+    rpc SetupPairVeths(SetupPairVethsRequest) returns (SetupPairVethsResponse) {}
+
+    // Get information about the workspace
+    rpc WorkspaceInfo(WorkspaceInfoRequest) returns (WorkspaceInfoResponse) {}
+}
+
+service WorkspaceInfoService {
+    // Get information about the workspace
+    rpc WorkspaceInfo(WorkspaceInfoRequest) returns (WorkspaceInfoResponse) {}
 }
 
 message PrepareForUserNSRequest {}
 message PrepareForUserNSResponse {
     FSShiftMethod fs_shift = 1;
-    bool full_workspace_backup = 2;
+    // was used for full workspace backup
+    reserved 2;
+    bool persistent_volume_claim = 3;
 }
 
 // FSShiftMethod describes the means by which we establish the ID shift for
 // user namespaced workspaces.
 enum FSShiftMethod {
     SHIFTFS = 0;
-    FUSE = 1;
+    // was used for FUSE
+    reserved 1;
 }
 
 message WriteIDMappingResponse {
@@ -71,6 +90,9 @@ message WriteIDMappingRequest {
     repeated Mapping mapping = 3;
 }
 
+message EvacuateCGroupRequest {}
+message EvacuateCGroupResponse {}
+
 message MountProcRequest {
     string target = 1;
     int64 pid = 2;
@@ -88,4 +110,29 @@ message TeardownRequest {
 }
 message TeardownResponse {
     bool success = 2;
+}
+
+message SetupPairVethsRequest {
+    int64 pid = 1;
+}
+message SetupPairVethsResponse {}
+
+message WorkspaceInfoRequest {}
+message WorkspaceInfoResponse {
+    Resources resources = 1;
+}
+
+message Resources {
+    Cpu cpu = 1;
+    Memory memory = 2;
+}
+
+message Cpu {
+    int64 used = 1;
+    int64 limit = 2;
+}
+
+message Memory {
+    int64 used = 1;
+    int64 limit = 2;
 }

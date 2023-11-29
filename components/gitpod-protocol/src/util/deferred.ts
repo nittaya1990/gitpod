@@ -1,7 +1,7 @@
 /**
  * Copyright (c) 2020 Gitpod GmbH. All rights reserved.
  * Licensed under the GNU Affero General Public License (AGPL).
- * See License-AGPL.txt in the project root for license information.
+ * See License.AGPL.txt in the project root for license information.
  */
 
 export class Deferred<T> {
@@ -17,14 +17,14 @@ export class Deferred<T> {
     }
 
     promise = new Promise<T>((resolve, reject) => {
-        this.resolve = (o) => {
+        this.resolve = (o?: T) => {
             this.isResolved = true;
-            resolve(o as any)
-            clearTimeout(this.timer)
+            resolve(o as T);
+            clearTimeout(this.timer);
         };
         this.reject = (e) => {
-            reject(e)
-            clearTimeout(this.timer)
-        }
+            reject(e);
+            clearTimeout(this.timer);
+        };
     });
 }

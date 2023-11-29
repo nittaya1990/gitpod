@@ -1,32 +1,36 @@
 /**
  * Copyright (c) 2020 Gitpod GmbH. All rights reserved.
  * Licensed under the GNU Affero General Public License (AGPL).
- * See License-AGPL.txt in the project root for license information.
+ * See License.AGPL.txt in the project root for license information.
  */
 
-import { injectable, inject } from 'inversify';
+import { injectable, inject } from "inversify";
 
 import { FileProvider, MaybeContent } from "../repohost/file-provider";
-import { Commit, User, Repository } from "@gitpod/gitpod-protocol"
+import { Commit, User, Repository } from "@gitpod/gitpod-protocol";
 import { GitLabApi, GitLab } from "./api";
-import { log } from '@gitpod/gitpod-protocol/lib/util/logging';
+import { log } from "@gitpod/gitpod-protocol/lib/util/logging";
 
 @injectable()
 export class GitlabFileProvider implements FileProvider {
-
     @inject(GitLabApi) protected readonly gitlabApi: GitLabApi;
 
     public async getGitpodFileContent(commit: Commit, user: User): Promise<MaybeContent> {
         const yamlVersion1 = await Promise.all([
-            this.getFileContent(commit, user, '.gitpod.yml'),
-            this.getFileContent(commit, user, '.gitpod')
+            this.getFileContent(commit, user, ".gitpod.yml"),
+            this.getFileContent(commit, user, ".gitpod"),
         ]);
-        return yamlVersion1.filter(f => !!f)[0];
+        return yamlVersion1.filter((f) => !!f)[0];
     }
 
-    public async getLastChangeRevision(repository: Repository, revisionOrBranch: string, user: User, path: string): Promise<string> {
-        const result = await this.gitlabApi.run<GitLab.Commit[]>(user, async g => {
-            return g.Commits.all(`${repository.owner}/${repository.name}`, { path, ref_name: revisionOrBranch });
+    public async getLastChangeRevision(
+        repository: Repository,
+        revisionOrBranch: string,
+        user: User,
+        path: string,
+    ): Promise<string> {
+        const result = await this.gitlabApi.run<GitLab.Commit[]>(user, async (g) => {
+            return g.Commits.all(`${repository.owner}/${repository.name}`, { path, refName: revisionOrBranch });
         });
 
         if (GitLab.ApiError.is(result)) {
@@ -49,7 +53,7 @@ export class GitlabFileProvider implements FileProvider {
             const result = await this.gitlabApi.getRawContents(user, org, name, commitish, path);
             return result;
         } catch (error) {
-            log.error(error);
+            log.debug(error);
         }
     }
 }

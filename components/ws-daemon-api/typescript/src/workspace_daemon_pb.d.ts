@@ -1,7 +1,7 @@
 /**
- * Copyright (c) 2021 Gitpod GmbH. All rights reserved.
+ * Copyright (c) 2023 Gitpod GmbH. All rights reserved.
  * Licensed under the GNU Affero General Public License (AGPL).
- * See License-AGPL.txt in the project root for license information.
+ * See License.AGPL.txt in the project root for license information.
  */
 
 // package: iws
@@ -32,8 +32,8 @@ export namespace PrepareForUserNSRequest {
 export class PrepareForUserNSResponse extends jspb.Message {
     getFsShift(): FSShiftMethod;
     setFsShift(value: FSShiftMethod): PrepareForUserNSResponse;
-    getFullWorkspaceBackup(): boolean;
-    setFullWorkspaceBackup(value: boolean): PrepareForUserNSResponse;
+    getPersistentVolumeClaim(): boolean;
+    setPersistentVolumeClaim(value: boolean): PrepareForUserNSResponse;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): PrepareForUserNSResponse.AsObject;
@@ -48,7 +48,7 @@ export class PrepareForUserNSResponse extends jspb.Message {
 export namespace PrepareForUserNSResponse {
     export type AsObject = {
         fsShift: FSShiftMethod,
-        fullWorkspaceBackup: boolean,
+        persistentVolumeClaim: boolean,
     }
 }
 
@@ -129,6 +129,40 @@ export namespace WriteIDMappingRequest {
         }
     }
 
+}
+
+export class EvacuateCGroupRequest extends jspb.Message {
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): EvacuateCGroupRequest.AsObject;
+    static toObject(includeInstance: boolean, msg: EvacuateCGroupRequest): EvacuateCGroupRequest.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: EvacuateCGroupRequest, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): EvacuateCGroupRequest;
+    static deserializeBinaryFromReader(message: EvacuateCGroupRequest, reader: jspb.BinaryReader): EvacuateCGroupRequest;
+}
+
+export namespace EvacuateCGroupRequest {
+    export type AsObject = {
+    }
+}
+
+export class EvacuateCGroupResponse extends jspb.Message {
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): EvacuateCGroupResponse.AsObject;
+    static toObject(includeInstance: boolean, msg: EvacuateCGroupResponse): EvacuateCGroupResponse.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: EvacuateCGroupResponse, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): EvacuateCGroupResponse;
+    static deserializeBinaryFromReader(message: EvacuateCGroupResponse, reader: jspb.BinaryReader): EvacuateCGroupResponse;
+}
+
+export namespace EvacuateCGroupResponse {
+    export type AsObject = {
+    }
 }
 
 export class MountProcRequest extends jspb.Message {
@@ -248,7 +282,158 @@ export namespace TeardownResponse {
     }
 }
 
+export class SetupPairVethsRequest extends jspb.Message {
+    getPid(): number;
+    setPid(value: number): SetupPairVethsRequest;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): SetupPairVethsRequest.AsObject;
+    static toObject(includeInstance: boolean, msg: SetupPairVethsRequest): SetupPairVethsRequest.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: SetupPairVethsRequest, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): SetupPairVethsRequest;
+    static deserializeBinaryFromReader(message: SetupPairVethsRequest, reader: jspb.BinaryReader): SetupPairVethsRequest;
+}
+
+export namespace SetupPairVethsRequest {
+    export type AsObject = {
+        pid: number,
+    }
+}
+
+export class SetupPairVethsResponse extends jspb.Message {
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): SetupPairVethsResponse.AsObject;
+    static toObject(includeInstance: boolean, msg: SetupPairVethsResponse): SetupPairVethsResponse.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: SetupPairVethsResponse, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): SetupPairVethsResponse;
+    static deserializeBinaryFromReader(message: SetupPairVethsResponse, reader: jspb.BinaryReader): SetupPairVethsResponse;
+}
+
+export namespace SetupPairVethsResponse {
+    export type AsObject = {
+    }
+}
+
+export class WorkspaceInfoRequest extends jspb.Message {
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): WorkspaceInfoRequest.AsObject;
+    static toObject(includeInstance: boolean, msg: WorkspaceInfoRequest): WorkspaceInfoRequest.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: WorkspaceInfoRequest, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): WorkspaceInfoRequest;
+    static deserializeBinaryFromReader(message: WorkspaceInfoRequest, reader: jspb.BinaryReader): WorkspaceInfoRequest;
+}
+
+export namespace WorkspaceInfoRequest {
+    export type AsObject = {
+    }
+}
+
+export class WorkspaceInfoResponse extends jspb.Message {
+
+    hasResources(): boolean;
+    clearResources(): void;
+    getResources(): Resources | undefined;
+    setResources(value?: Resources): WorkspaceInfoResponse;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): WorkspaceInfoResponse.AsObject;
+    static toObject(includeInstance: boolean, msg: WorkspaceInfoResponse): WorkspaceInfoResponse.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: WorkspaceInfoResponse, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): WorkspaceInfoResponse;
+    static deserializeBinaryFromReader(message: WorkspaceInfoResponse, reader: jspb.BinaryReader): WorkspaceInfoResponse;
+}
+
+export namespace WorkspaceInfoResponse {
+    export type AsObject = {
+        resources?: Resources.AsObject,
+    }
+}
+
+export class Resources extends jspb.Message {
+
+    hasCpu(): boolean;
+    clearCpu(): void;
+    getCpu(): Cpu | undefined;
+    setCpu(value?: Cpu): Resources;
+
+    hasMemory(): boolean;
+    clearMemory(): void;
+    getMemory(): Memory | undefined;
+    setMemory(value?: Memory): Resources;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): Resources.AsObject;
+    static toObject(includeInstance: boolean, msg: Resources): Resources.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: Resources, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): Resources;
+    static deserializeBinaryFromReader(message: Resources, reader: jspb.BinaryReader): Resources;
+}
+
+export namespace Resources {
+    export type AsObject = {
+        cpu?: Cpu.AsObject,
+        memory?: Memory.AsObject,
+    }
+}
+
+export class Cpu extends jspb.Message {
+    getUsed(): number;
+    setUsed(value: number): Cpu;
+    getLimit(): number;
+    setLimit(value: number): Cpu;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): Cpu.AsObject;
+    static toObject(includeInstance: boolean, msg: Cpu): Cpu.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: Cpu, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): Cpu;
+    static deserializeBinaryFromReader(message: Cpu, reader: jspb.BinaryReader): Cpu;
+}
+
+export namespace Cpu {
+    export type AsObject = {
+        used: number,
+        limit: number,
+    }
+}
+
+export class Memory extends jspb.Message {
+    getUsed(): number;
+    setUsed(value: number): Memory;
+    getLimit(): number;
+    setLimit(value: number): Memory;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): Memory.AsObject;
+    static toObject(includeInstance: boolean, msg: Memory): Memory.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: Memory, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): Memory;
+    static deserializeBinaryFromReader(message: Memory, reader: jspb.BinaryReader): Memory;
+}
+
+export namespace Memory {
+    export type AsObject = {
+        used: number,
+        limit: number,
+    }
+}
+
 export enum FSShiftMethod {
     SHIFTFS = 0,
-    FUSE = 1,
 }

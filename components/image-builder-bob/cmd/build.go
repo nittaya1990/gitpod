@@ -1,6 +1,6 @@
 // Copyright (c) 2021 Gitpod GmbH. All rights reserved.
 // Licensed under the GNU Affero General Public License (AGPL).
-// See License-AGPL.txt in the project root for license information.
+// See License.AGPL.txt in the project root for license information.
 
 package cmd
 
@@ -19,7 +19,7 @@ var buildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Runs the image build and is configured using environment variables (see pkg/builder/config.go for details)",
 	Run: func(cmd *cobra.Command, args []string) {
-		log.Init("bob", "", true, false)
+		log.Init("bob", "", true, true)
 		log := log.WithField("command", "build")
 
 		t0 := time.Now()
@@ -48,7 +48,7 @@ var buildCmd = &cobra.Command{
 				time.Sleep(10 * time.Second)
 			}
 
-			return
+			os.Exit(1)
 		}
 	},
 }

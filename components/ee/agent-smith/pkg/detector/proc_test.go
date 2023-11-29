@@ -1,6 +1,6 @@
-// Copyright (c) 2021 Gitpod GmbH. All rights reserved.
-// Licensed under the Gitpod Enterprise Source Code License,
-// See License.enterprise.txt in the project root folder.
+// Copyright (c) 2022 Gitpod GmbH. All rights reserved.
+// Licensed under the GNU Affero General Public License (AGPL).
+// See License.AGPL.txt in the project root for license information.
 
 package detector
 
@@ -68,7 +68,26 @@ func TestFindWorkspaces(t *testing.T) {
 					P:   &process{PID: 2, Parent: res[1].P, Cmdline: []string{"/proc/self/exe", "ring1"}},
 					Env: []string{"GITPOD_WORKSPACE_ID=foobar", "GITPOD_INSTANCE_ID=baz"},
 				}
-				res[3] = memoryProcEntry{P: &process{PID: 3, Parent: res[2].P, Cmdline: []string{"supervisor", "run"}}}
+				res[3] = memoryProcEntry{P: &process{PID: 3, Parent: res[2].P, Cmdline: []string{"supervisor", "init"}}}
+				res[1].P.Children = []*process{res[2].P}
+				res[2].P.Children = []*process{res[3].P}
+				return res
+			})(),
+			Expectation: []WorkspaceAndDepth{
+				{PID: 2, D: 1, K: ProcessSandbox, C: "/proc/self/exe", W: ws},
+				{PID: 3, D: 2, K: ProcessSupervisor, C: "supervisor", W: ws},
+			},
+		},
+		{
+			Name: "multiple workspacekit children",
+			Proc: (func() memoryProc {
+				res := make(map[int]memoryProcEntry)
+				res[1] = memoryProcEntry{P: &process{PID: 1}}
+				res[2] = memoryProcEntry{
+					P:   &process{PID: 2, Parent: res[1].P, Cmdline: []string{"/proc/self/exe", "ring1"}},
+					Env: []string{"GITPOD_WORKSPACE_ID=foobar", "GITPOD_INSTANCE_ID=baz"},
+				}
+				res[3] = memoryProcEntry{P: &process{PID: 3, Parent: res[2].P, Cmdline: []string{"supervisor", "init"}}}
 				res[1].P.Children = []*process{res[2].P}
 				res[2].P.Children = []*process{res[3].P}
 				return res
@@ -87,7 +106,7 @@ func TestFindWorkspaces(t *testing.T) {
 					P:   &process{PID: 2, Parent: res[1].P, Cmdline: []string{"/proc/self/exe", "ring1"}},
 					Env: []string{"GITPOD_WORKSPACE_ID=foobar", "GITPOD_INSTANCE_ID=baz"},
 				}
-				res[3] = memoryProcEntry{P: &process{PID: 3, Parent: res[2].P, Cmdline: []string{"supervisor", "run"}}}
+				res[3] = memoryProcEntry{P: &process{PID: 3, Parent: res[2].P, Cmdline: []string{"supervisor", "init"}}}
 				res[1].P.Children = []*process{res[2].P}
 				res[2].P.Children = []*process{res[3].P}
 
@@ -95,7 +114,7 @@ func TestFindWorkspaces(t *testing.T) {
 					P:   &process{PID: 4, Parent: res[3].P, Cmdline: []string{"/proc/self/exe", "ring1"}},
 					Env: []string{"GITPOD_WORKSPACE_ID=bla", "GITPOD_INSTANCE_ID=blabla"},
 				}
-				res[5] = memoryProcEntry{P: &process{PID: 5, Parent: res[4].P, Cmdline: []string{"supervisor", "run"}}}
+				res[5] = memoryProcEntry{P: &process{PID: 5, Parent: res[4].P, Cmdline: []string{"supervisor", "init"}}}
 				res[3].P.Children = []*process{res[4].P}
 				res[4].P.Children = []*process{res[5].P}
 
@@ -124,7 +143,7 @@ func TestFindWorkspaces(t *testing.T) {
 					P:   &process{PID: 4, Parent: res[3].P, Cmdline: []string{"/proc/self/exe", "ring1"}},
 					Env: []string{"GITPOD_WORKSPACE_ID=bla", "GITPOD_INSTANCE_ID=blabla"},
 				}
-				res[5] = memoryProcEntry{P: &process{PID: 5, Parent: res[4].P, Cmdline: []string{"supervisor", "run"}}}
+				res[5] = memoryProcEntry{P: &process{PID: 5, Parent: res[4].P, Cmdline: []string{"supervisor", "init"}}}
 				res[3].P.Children = []*process{res[4].P}
 				res[4].P.Children = []*process{res[5].P}
 
@@ -132,7 +151,7 @@ func TestFindWorkspaces(t *testing.T) {
 					P:   &process{PID: 6, Parent: res[3].P, Cmdline: []string{"/proc/self/exe", "ring1"}},
 					Env: []string{"GITPOD_WORKSPACE_ID=second-ws", "GITPOD_INSTANCE_ID=second-ws"},
 				}
-				res[7] = memoryProcEntry{P: &process{PID: 7, Parent: res[4].P, Cmdline: []string{"supervisor", "run"}}}
+				res[7] = memoryProcEntry{P: &process{PID: 7, Parent: res[4].P, Cmdline: []string{"supervisor", "init"}}}
 				res[3].P.Children = []*process{res[4].P, res[6].P}
 				res[6].P.Children = []*process{res[7].P}
 
@@ -196,7 +215,7 @@ func TestRunDetector(t *testing.T) {
 						P:   &process{Hash: 2, PID: 2, Parent: res[1].P, Cmdline: []string{"/proc/self/exe", "ring1"}},
 						Env: []string{"GITPOD_WORKSPACE_ID=foobar", "GITPOD_INSTANCE_ID=baz"},
 					}
-					res[3] = memoryProcEntry{P: &process{Hash: 3, PID: 3, Parent: res[2].P, Cmdline: []string{"supervisor", "run"}}}
+					res[3] = memoryProcEntry{P: &process{Hash: 3, PID: 3, Parent: res[2].P, Cmdline: []string{"supervisor", "init"}}}
 					res[4] = memoryProcEntry{P: &process{Hash: 4, PID: 4, Parent: res[3].P, Cmdline: []string{"bad-actor", "has", "args"}}}
 					res[1].P.Children = []*process{res[2].P}
 					res[2].P.Children = []*process{res[3].P}
@@ -210,7 +229,7 @@ func TestRunDetector(t *testing.T) {
 						P:   &process{Hash: 2, PID: 2, Parent: res[1].P, Cmdline: []string{"/proc/self/exe", "ring1"}},
 						Env: []string{"GITPOD_WORKSPACE_ID=foobar", "GITPOD_INSTANCE_ID=baz"},
 					}
-					res[3] = memoryProcEntry{P: &process{Hash: 3, PID: 3, Parent: res[2].P, Cmdline: []string{"supervisor", "run"}}}
+					res[3] = memoryProcEntry{P: &process{Hash: 3, PID: 3, Parent: res[2].P, Cmdline: []string{"supervisor", "init"}}}
 					res[4] = memoryProcEntry{P: &process{Hash: 4, PID: 4, Parent: res[3].P, Cmdline: []string{"bad-actor", "has", "args"}}}
 					res[5] = memoryProcEntry{P: &process{Hash: 5, PID: 5, Parent: res[3].P, Cmdline: []string{"another-bad-actor", "has", "args"}}}
 					res[1].P.Children = []*process{res[2].P}
@@ -233,6 +252,7 @@ func TestRunDetector(t *testing.T) {
 			det := ProcfsDetector{
 				indexSizeGuage:     prometheus.NewGauge(prometheus.GaugeOpts{Name: "dont"}),
 				cacheUseCounterVec: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"use"}),
+				workspaceGauge:     prometheus.NewGauge(prometheus.GaugeOpts{Name: "dont"}),
 				cache:              cache,
 			}
 
@@ -324,7 +344,7 @@ func TestParseGitpodEnviron(t *testing.T) {
 	}
 }
 
-func benchmarkParseGitPodEnviron(content string, b *testing.B) {
+func benchmarkParseGitpodEnviron(content string, b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
@@ -332,28 +352,28 @@ func benchmarkParseGitPodEnviron(content string, b *testing.B) {
 	}
 }
 
-func BenchmarkParseGitPodEnvironP0(b *testing.B) { benchmarkParseGitPodEnviron("", b) }
-func BenchmarkParseGitPodEnvironP1(b *testing.B) {
-	benchmarkParseGitPodEnviron("GITPOD_INSTANCE_ID=foobar\000", b)
+func BenchmarkParseGitpodEnvironP0(b *testing.B) { benchmarkParseGitpodEnviron("", b) }
+func BenchmarkParseGitpodEnvironP1(b *testing.B) {
+	benchmarkParseGitpodEnviron("GITPOD_INSTANCE_ID=foobar\000", b)
 }
-func BenchmarkParseGitPodEnvironP2(b *testing.B) {
-	benchmarkParseGitPodEnviron("GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000", b)
+func BenchmarkParseGitpodEnvironP2(b *testing.B) {
+	benchmarkParseGitpodEnviron("GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000", b)
 }
 func BenchmarkParseGitPodEnvironP4(b *testing.B) {
-	benchmarkParseGitPodEnviron("GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000", b)
+	benchmarkParseGitpodEnviron("GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000", b)
 }
-func BenchmarkParseGitPodEnvironP8(b *testing.B) {
-	benchmarkParseGitPodEnviron("GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000", b)
+func BenchmarkParseGitpodEnvironP8(b *testing.B) {
+	benchmarkParseGitpodEnviron("GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000GITPOD_INSTANCE_ID=foobar\000", b)
 }
-func BenchmarkParseGitPodEnvironN1(b *testing.B) { benchmarkParseGitPodEnviron("NOT_ME\000", b) }
-func BenchmarkParseGitPodEnvironN2(b *testing.B) {
-	benchmarkParseGitPodEnviron("NOT_ME\000NOT_ME\000", b)
+func BenchmarkParseGitpodEnvironN1(b *testing.B) { benchmarkParseGitpodEnviron("NOT_ME\000", b) }
+func BenchmarkParseGitpodEnvironN2(b *testing.B) {
+	benchmarkParseGitpodEnviron("NOT_ME\000NOT_ME\000", b)
 }
-func BenchmarkParseGitPodEnvironN4(b *testing.B) {
-	benchmarkParseGitPodEnviron("NOT_ME\000NOT_ME\000NOT_ME\000NOT_ME\000", b)
+func BenchmarkParseGitpodEnvironN4(b *testing.B) {
+	benchmarkParseGitpodEnviron("NOT_ME\000NOT_ME\000NOT_ME\000NOT_ME\000", b)
 }
-func BenchmarkParseGitPodEnvironN8(b *testing.B) {
-	benchmarkParseGitPodEnviron("NOT_ME\000NOT_ME\000NOT_ME\000NOT_ME\000NOT_ME\000NOT_ME\000NOT_ME\000NOT_ME\000", b)
+func BenchmarkParseGitpodEnvironN8(b *testing.B) {
+	benchmarkParseGitpodEnviron("NOT_ME\000NOT_ME\000NOT_ME\000NOT_ME\000NOT_ME\000NOT_ME\000NOT_ME\000NOT_ME\000", b)
 }
 
 func TestParseStat(t *testing.T) {

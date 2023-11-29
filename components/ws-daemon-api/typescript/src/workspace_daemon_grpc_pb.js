@@ -1,7 +1,7 @@
 /**
- * Copyright (c) 2021 Gitpod GmbH. All rights reserved.
+ * Copyright (c) 2023 Gitpod GmbH. All rights reserved.
  * Licensed under the GNU Affero General Public License (AGPL).
- * See License-AGPL.txt in the project root for license information.
+ * See License.AGPL.txt in the project root for license information.
  */
 
 // GENERATED CODE -- DO NOT EDIT!
@@ -9,6 +9,28 @@
 'use strict';
 var grpc = require('@grpc/grpc-js');
 var workspace_daemon_pb = require('./workspace_daemon_pb.js');
+
+function serialize_iws_EvacuateCGroupRequest(arg) {
+  if (!(arg instanceof workspace_daemon_pb.EvacuateCGroupRequest)) {
+    throw new Error('Expected argument of type iws.EvacuateCGroupRequest');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_iws_EvacuateCGroupRequest(buffer_arg) {
+  return workspace_daemon_pb.EvacuateCGroupRequest.deserializeBinary(new Uint8Array(buffer_arg));
+}
+
+function serialize_iws_EvacuateCGroupResponse(arg) {
+  if (!(arg instanceof workspace_daemon_pb.EvacuateCGroupResponse)) {
+    throw new Error('Expected argument of type iws.EvacuateCGroupResponse');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_iws_EvacuateCGroupResponse(buffer_arg) {
+  return workspace_daemon_pb.EvacuateCGroupResponse.deserializeBinary(new Uint8Array(buffer_arg));
+}
 
 function serialize_iws_MountProcRequest(arg) {
   if (!(arg instanceof workspace_daemon_pb.MountProcRequest)) {
@@ -54,6 +76,28 @@ function deserialize_iws_PrepareForUserNSResponse(buffer_arg) {
   return workspace_daemon_pb.PrepareForUserNSResponse.deserializeBinary(new Uint8Array(buffer_arg));
 }
 
+function serialize_iws_SetupPairVethsRequest(arg) {
+  if (!(arg instanceof workspace_daemon_pb.SetupPairVethsRequest)) {
+    throw new Error('Expected argument of type iws.SetupPairVethsRequest');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_iws_SetupPairVethsRequest(buffer_arg) {
+  return workspace_daemon_pb.SetupPairVethsRequest.deserializeBinary(new Uint8Array(buffer_arg));
+}
+
+function serialize_iws_SetupPairVethsResponse(arg) {
+  if (!(arg instanceof workspace_daemon_pb.SetupPairVethsResponse)) {
+    throw new Error('Expected argument of type iws.SetupPairVethsResponse');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_iws_SetupPairVethsResponse(buffer_arg) {
+  return workspace_daemon_pb.SetupPairVethsResponse.deserializeBinary(new Uint8Array(buffer_arg));
+}
+
 function serialize_iws_TeardownRequest(arg) {
   if (!(arg instanceof workspace_daemon_pb.TeardownRequest)) {
     throw new Error('Expected argument of type iws.TeardownRequest');
@@ -96,6 +140,28 @@ function serialize_iws_UmountProcResponse(arg) {
 
 function deserialize_iws_UmountProcResponse(buffer_arg) {
   return workspace_daemon_pb.UmountProcResponse.deserializeBinary(new Uint8Array(buffer_arg));
+}
+
+function serialize_iws_WorkspaceInfoRequest(arg) {
+  if (!(arg instanceof workspace_daemon_pb.WorkspaceInfoRequest)) {
+    throw new Error('Expected argument of type iws.WorkspaceInfoRequest');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_iws_WorkspaceInfoRequest(buffer_arg) {
+  return workspace_daemon_pb.WorkspaceInfoRequest.deserializeBinary(new Uint8Array(buffer_arg));
+}
+
+function serialize_iws_WorkspaceInfoResponse(arg) {
+  if (!(arg instanceof workspace_daemon_pb.WorkspaceInfoResponse)) {
+    throw new Error('Expected argument of type iws.WorkspaceInfoResponse');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_iws_WorkspaceInfoResponse(buffer_arg) {
+  return workspace_daemon_pb.WorkspaceInfoResponse.deserializeBinary(new Uint8Array(buffer_arg));
 }
 
 function serialize_iws_WriteIDMappingRequest(arg) {
@@ -151,6 +217,20 @@ writeIDMapping: {
     requestDeserialize: deserialize_iws_WriteIDMappingRequest,
     responseSerialize: serialize_iws_WriteIDMappingResponse,
     responseDeserialize: deserialize_iws_WriteIDMappingResponse,
+  },
+  // EvacuateCGroup empties the workspace pod cgroup and produces a new substructure.
+// In combincation with introducing a new cgroup namespace, we can create a situation
+// where the subcontroller are enabled and the ring2-visible cgroup is of type "domain".
+evacuateCGroup: {
+    path: '/iws.InWorkspaceService/EvacuateCGroup',
+    requestStream: false,
+    responseStream: false,
+    requestType: workspace_daemon_pb.EvacuateCGroupRequest,
+    responseType: workspace_daemon_pb.EvacuateCGroupResponse,
+    requestSerialize: serialize_iws_EvacuateCGroupRequest,
+    requestDeserialize: deserialize_iws_EvacuateCGroupRequest,
+    responseSerialize: serialize_iws_EvacuateCGroupResponse,
+    responseDeserialize: deserialize_iws_EvacuateCGroupResponse,
   },
   // MountProc mounts a masked proc in the container's rootfs.
 // The PID must be in the PID namespace of the workspace container.
@@ -221,6 +301,46 @@ teardown: {
     responseSerialize: serialize_iws_TeardownResponse,
     responseDeserialize: deserialize_iws_TeardownResponse,
   },
+  // Set up a pair of veths that interconnect the specified PID and the workspace container's network namespace.
+setupPairVeths: {
+    path: '/iws.InWorkspaceService/SetupPairVeths',
+    requestStream: false,
+    responseStream: false,
+    requestType: workspace_daemon_pb.SetupPairVethsRequest,
+    responseType: workspace_daemon_pb.SetupPairVethsResponse,
+    requestSerialize: serialize_iws_SetupPairVethsRequest,
+    requestDeserialize: deserialize_iws_SetupPairVethsRequest,
+    responseSerialize: serialize_iws_SetupPairVethsResponse,
+    responseDeserialize: deserialize_iws_SetupPairVethsResponse,
+  },
+  // Get information about the workspace
+workspaceInfo: {
+    path: '/iws.InWorkspaceService/WorkspaceInfo',
+    requestStream: false,
+    responseStream: false,
+    requestType: workspace_daemon_pb.WorkspaceInfoRequest,
+    responseType: workspace_daemon_pb.WorkspaceInfoResponse,
+    requestSerialize: serialize_iws_WorkspaceInfoRequest,
+    requestDeserialize: deserialize_iws_WorkspaceInfoRequest,
+    responseSerialize: serialize_iws_WorkspaceInfoResponse,
+    responseDeserialize: deserialize_iws_WorkspaceInfoResponse,
+  },
 };
 
 exports.InWorkspaceServiceClient = grpc.makeGenericClientConstructor(InWorkspaceServiceService);
+var WorkspaceInfoServiceService = exports.WorkspaceInfoServiceService = {
+  // Get information about the workspace
+workspaceInfo: {
+    path: '/iws.WorkspaceInfoService/WorkspaceInfo',
+    requestStream: false,
+    responseStream: false,
+    requestType: workspace_daemon_pb.WorkspaceInfoRequest,
+    responseType: workspace_daemon_pb.WorkspaceInfoResponse,
+    requestSerialize: serialize_iws_WorkspaceInfoRequest,
+    requestDeserialize: deserialize_iws_WorkspaceInfoRequest,
+    responseSerialize: serialize_iws_WorkspaceInfoResponse,
+    responseDeserialize: deserialize_iws_WorkspaceInfoResponse,
+  },
+};
+
+exports.WorkspaceInfoServiceClient = grpc.makeGenericClientConstructor(WorkspaceInfoServiceService);

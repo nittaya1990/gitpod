@@ -1,26 +1,29 @@
 // Copyright (c) 2020 Gitpod GmbH. All rights reserved.
 // Licensed under the GNU Affero General Public License (AGPL).
-// See License-AGPL.txt in the project root for license information.
+// See License.AGPL.txt in the project root for license information.
 
-package server
+package gitpod
 
 import (
 	"context"
-	"os"
 
-	serverapi "github.com/gitpod-io/gitpod/gitpod-protocol"
-	supervisor "github.com/gitpod-io/gitpod/supervisor/api"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/gitpod-io/gitpod/common-go/util"
+	serverapi "github.com/gitpod-io/gitpod/gitpod-protocol"
+	supervisor "github.com/gitpod-io/gitpod/supervisor/api"
+)
+
+var (
+	// Version - set during build
+	Version = "dev"
 )
 
 func GetWSInfo(ctx context.Context) (*supervisor.WorkspaceInfoResponse, error) {
-	supervisorAddr := os.Getenv("SUPERVISOR_ADDR")
-	if supervisorAddr == "" {
-		supervisorAddr = "localhost:22999"
-	}
-	supervisorConn, err := grpc.Dial(supervisorAddr, grpc.WithInsecure())
+	supervisorConn, err := grpc.Dial(util.GetSupervisorAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, xerrors.Errorf("failed connecting to supervisor: %w", err)
 	}
@@ -33,11 +36,7 @@ func GetWSInfo(ctx context.Context) (*supervisor.WorkspaceInfoResponse, error) {
 }
 
 func ConnectToServer(ctx context.Context, wsInfo *supervisor.WorkspaceInfoResponse, scope []string) (*serverapi.APIoverJSONRPC, error) {
-	supervisorAddr := os.Getenv("SUPERVISOR_ADDR")
-	if supervisorAddr == "" {
-		supervisorAddr = "localhost:22999"
-	}
-	supervisorConn, err := grpc.Dial(supervisorAddr, grpc.WithInsecure())
+	supervisorConn, err := grpc.Dial(util.GetSupervisorAddress(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, xerrors.Errorf("failed connecting to supervisor: %w", err)
 	}
@@ -50,10 +49,15 @@ func ConnectToServer(ctx context.Context, wsInfo *supervisor.WorkspaceInfoRespon
 	if err != nil {
 		return nil, xerrors.Errorf("failed getting token from supervisor: %w", err)
 	}
+
 	client, err := serverapi.ConnectToServer(wsInfo.GitpodApi.Endpoint, serverapi.ConnectToServerOpts{
 		Token:   clientToken.Token,
 		Context: ctx,
 		Log:     log.NewEntry(log.StandardLogger()),
+		ExtraHeaders: map[string]string{
+			"User-Agent":       "gitpod/cli",
+			"X-Client-Version": Version,
+		},
 	})
 	if err != nil {
 		return nil, xerrors.Errorf("failed connecting to server: %w", err)

@@ -1,23 +1,31 @@
 # Copyright (c) 2021 Gitpod GmbH. All rights reserved.
 # Licensed under the GNU Affero General Public License (AGPL).
-# See License-AGPL.txt in the project root for license information.
+# See License.AGPL.txt in the project root for license information.
 
-FROM golang:1.17 AS build
-WORKDIR /app
-COPY status/* /app/
-RUN go build -o status
-
-FROM alpine:3.14 as download
-ARG JETBRAINS_BACKEND_URL
-WORKDIR /workdir
-RUN apk add --no-cache --upgrade curl gzip tar unzip
-RUN curl -sSLo backend.tar.gz "$JETBRAINS_BACKEND_URL" && tar -xf backend.tar.gz --strip-components=1 && rm backend.tar.gz
-COPY --chown=33333:33333 components-ide-jetbrains-backend-plugin--plugin/build/distributions/jetbrains-backend-plugin-1.0-SNAPSHOT.zip /workdir
-RUN unzip jetbrains-backend-plugin-1.0-SNAPSHOT.zip -d plugins/ && rm jetbrains-backend-plugin-1.0-SNAPSHOT.zip
-
-FROM scratch
+FROM cgr.dev/chainguard/wolfi-base:latest@sha256:91f3e08712a854ff4a146b7cca7f1b7581f205bc589a06135f51590e00d2990e as base_builder
+ARG JETBRAINS_DOWNLOAD_QUALIFIER
 ARG SUPERVISOR_IDE_CONFIG
-COPY --chown=33333:33333 ${SUPERVISOR_IDE_CONFIG} /ide-desktop/supervisor-ide-config.json
-COPY --chown=33333:33333 startup.sh /ide-desktop/
-COPY --chown=33333:33333 --from=build /app/status /ide-desktop/
-COPY --chown=33333:33333 --from=download /workdir/ /ide-desktop/backend/
+ARG JETBRAINS_BACKEND_VERSION
+
+RUN apk add --no-cache jq
+
+COPY ${SUPERVISOR_IDE_CONFIG} /tmp/supervisor-ide-config-template.json
+RUN jq --arg JETBRAINS_BACKEND_VERSION "$JETBRAINS_BACKEND_VERSION" '.version = $JETBRAINS_BACKEND_VERSION' /tmp/supervisor-ide-config-template.json > /tmp/supervisor-ide-config.json
+
+RUN mkdir /ide-desktop \
+    && mkdir /ide-desktop/${JETBRAINS_DOWNLOAD_QUALIFIER} \
+    # for backward compatibility with older supervisor, remove in the future
+    && cp /tmp/supervisor-ide-config.json /ide-desktop/supervisor-ide-config.json \
+    && cp /tmp/supervisor-ide-config.json /ide-desktop/${JETBRAINS_DOWNLOAD_QUALIFIER}/supervisor-ide-config.json
+
+# for debugging
+# FROM cgr.dev/chainguard/wolfi-base:latest@sha256:91f3e08712a854ff4a146b7cca7f1b7581f205bc589a06135f51590e00d2990e
+FROM scratch
+ARG JETBRAINS_BACKEND_VERSION
+ARG JETBRAINS_DOWNLOAD_QUALIFIER
+# ensures right permissions for /ide-desktop
+COPY --from=base_builder --chown=33333:33333 /ide-desktop/ /ide-desktop/
+COPY --chown=33333:33333 components-ide-jetbrains-image--download-${JETBRAINS_DOWNLOAD_QUALIFIER}/backend /ide-desktop/${JETBRAINS_DOWNLOAD_QUALIFIER}/backend
+COPY --chown=33333:33333 components-ide-jetbrains-cli--app/cli /ide-desktop/${JETBRAINS_DOWNLOAD_QUALIFIER}/bin/idea-cli
+
+LABEL "io.gitpod.ide.version"=$JETBRAINS_BACKEND_VERSION

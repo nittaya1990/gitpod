@@ -1,6 +1,6 @@
 // Copyright (c) 2021 Gitpod GmbH. All rights reserved.
 // Licensed under the GNU Affero General Public License (AGPL).
-// See License-AGPL.txt in the project root for license information.
+// See License.AGPL.txt in the project root for license information.
 
 package builder
 
@@ -45,10 +45,10 @@ func GetConfigFromEnv() (*Config, error) {
 	}
 
 	if cfg.BaseRef == "" {
-		return nil, xerrors.Errorf("BOB_BASE_REF must not be empty")
+		cfg.BaseRef = "localhost:8080/base:latest"
 	}
 	if cfg.TargetRef == "" {
-		return nil, xerrors.Errorf("BOB_TARGET_REF must not be empty")
+		cfg.TargetRef = "localhost:8080/target:latest"
 	}
 	if cfg.BuildBase {
 		if cfg.Dockerfile == "" {

@@ -1,7 +1,7 @@
 /**
  * Copyright (c) 2021 Gitpod GmbH. All rights reserved.
  * Licensed under the GNU Affero General Public License (AGPL).
- * See License-AGPL.txt in the project root for license information.
+ * See License.AGPL.txt in the project root for license information.
  */
 
 import { MigrationInterface, QueryRunner } from "typeorm";
@@ -13,7 +13,6 @@ import { columnExists, tableExists } from "./migration/helper/helper";
  * entrypoint that triggers this "meta-migration", which re-uses the common migration interface.
  */
 export class MigrateMigrations0_2_0 implements MigrationInterface {
-
     public async up(queryRunner: QueryRunner): Promise<any> {
         if (await tableExists(queryRunner, "migrations")) {
             const idColumnExists = await columnExists(queryRunner, "migrations", "id");
@@ -39,5 +38,4 @@ export class MigrateMigrations0_2_0 implements MigrationInterface {
             }
         }
     }
-
 }

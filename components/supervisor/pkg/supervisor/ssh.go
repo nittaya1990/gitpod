@@ -1,6 +1,6 @@
 // Copyright (c) 2020 Gitpod GmbH. All rights reserved.
 // Licensed under the GNU Affero General Public License (AGPL).
-// See License-AGPL.txt in the project root for license information.
+// See License.AGPL.txt in the project root for license information.
 
 package supervisor
 
@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -17,9 +18,11 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/gitpod-io/gitpod/common-go/log"
+	"github.com/gitpod-io/gitpod/supervisor/pkg/dropwriter"
+	"github.com/sirupsen/logrus"
 )
 
-func newSSHServer(ctx context.Context, cfg *Config) (*sshServer, error) {
+func newSSHServer(ctx context.Context, cfg *Config, envvars []string) (*sshServer, error) {
 	bin, err := os.Executable()
 	if err != nil {
 		return nil, xerrors.Errorf("cannot find executable path: %w", err)
@@ -32,21 +35,23 @@ func newSSHServer(ctx context.Context, cfg *Config) (*sshServer, error) {
 			return nil, xerrors.Errorf("unexpected error creating SSH key: %w", err)
 		}
 	}
-	err = writeSSHEnv(cfg)
+	err = ensureSSHDir(cfg)
 	if err != nil {
-		return nil, xerrors.Errorf("unexpected error creating SSH env: %w", err)
+		return nil, xerrors.Errorf("unexpected error creating SSH dir: %w", err)
 	}
 
 	return &sshServer{
-		ctx:    ctx,
-		cfg:    cfg,
-		sshkey: sshkey,
+		ctx:     ctx,
+		cfg:     cfg,
+		sshkey:  sshkey,
+		envvars: envvars,
 	}, nil
 }
 
 type sshServer struct {
-	ctx context.Context
-	cfg *Config
+	ctx     context.Context
+	cfg     *Config
+	envvars []string
 
 	sshkey string
 }
@@ -82,8 +87,9 @@ func (s *sshServer) handleConn(ctx context.Context, conn net.Conn) {
 		return
 	}
 
-	args := []string{
-		"-iedD", "-f/dev/null",
+	var args []string
+	args = append(args,
+		"-ieD", "-f/dev/null",
 		"-oProtocol 2",
 		"-oAllowUsers gitpod",
 		"-oPasswordAuthentication no",
@@ -92,15 +98,42 @@ func (s *sshServer) handleConn(ctx context.Context, conn net.Conn) {
 		"-oLoginGraceTime 20",
 		"-oPrintLastLog no",
 		"-oPermitUserEnvironment yes",
-		"-oHostKey " + s.sshkey,
+		"-oHostKey "+s.sshkey,
 		"-oPidFile /dev/null",
 		"-oUseDNS no", // Disable DNS lookups.
 		"-oSubsystem sftp internal-sftp",
 		"-oStrictModes no", // don't care for home directory and file permissions
+	)
+	// can be configured with gp env LOG_LEVEL=DEBUG to see SSH sessions/channels
+	sshdLogLevel := "ERROR"
+	switch log.Log.Logger.GetLevel() {
+	case logrus.PanicLevel:
+		sshdLogLevel = "FATAL"
+	case logrus.FatalLevel:
+		sshdLogLevel = "FATAL"
+	case logrus.ErrorLevel:
+		sshdLogLevel = "ERROR"
+	case logrus.WarnLevel:
+		sshdLogLevel = "INFO"
+	case logrus.InfoLevel:
+		sshdLogLevel = "INFO"
+	case logrus.DebugLevel:
+		sshdLogLevel = "VERBOSE"
+	case logrus.TraceLevel:
+		sshdLogLevel = "DEBUG"
 	}
+	args = append(args, "-oLogLevel "+sshdLogLevel)
 
-	if os.Getenv("SUPERVISOR_DEBUG_ENABLE") != "" {
-		args = append(args, "-oLogLevel DEBUG")
+	envs := make([]string, 0)
+	for _, env := range s.envvars {
+		s := strings.SplitN(env, "=", 2)
+		if len(s) != 2 {
+			continue
+		}
+		envs = append(envs, fmt.Sprintf("%s=%s", s[0], fmt.Sprintf("\"%s\"", strings.ReplaceAll(strings.ReplaceAll(s[1], `\`, `\\`), `"`, `\"`))))
+	}
+	if len(envs) > 0 {
+		args = append(args, fmt.Sprintf("-oSetEnv %s", strings.Join(envs, " ")))
 	}
 
 	socketFD, err := conn.(*net.TCPConn).File()
@@ -113,9 +146,14 @@ func (s *sshServer) handleConn(ctx context.Context, conn net.Conn) {
 	log.WithField("args", args).Debug("sshd flags")
 	cmd := exec.CommandContext(ctx, openssh, args...)
 	cmd = runAsGitpodUser(cmd)
-	cmd.Env = buildChildProcEnv(s.cfg, nil)
+	cmd.Env = s.envvars
 	cmd.ExtraFiles = []*os.File{socketFD}
 	cmd.Stderr = os.Stderr
+	if s.cfg.WorkspaceLogRateLimit > 0 {
+		limit := int64(s.cfg.WorkspaceLogRateLimit)
+		cmd.Stderr = dropwriter.Writer(cmd.Stderr, dropwriter.NewBucket(limit*1024*3, limit*1024))
+		log.WithField("limit_kb_per_sec", limit).Info("rate limiting SSH log output")
+	}
 	cmd.Stdin = bufio.NewReader(socketFD)
 	cmd.Stdout = bufio.NewWriter(socketFD)
 
@@ -161,7 +199,7 @@ func prepareSSHKey(ctx context.Context, sshkey string) error {
 		return xerrors.Errorf("cannot locate ssh-keygen (path %v)", sshkeygen)
 	}
 
-	keycmd := exec.Command(sshkeygen, "-t", "rsa", "-q", "-N", "", "-f", sshkey)
+	keycmd := exec.Command(sshkeygen, "-t", "ecdsa", "-q", "-N", "", "-f", sshkey)
 	// We need to force HOME because the Gitpod user might not have existed at the start of the container
 	// which makes the container runtime set an invalid HOME value.
 	keycmd.Env = func() []string {
@@ -177,7 +215,7 @@ func prepareSSHKey(ctx context.Context, sshkey string) error {
 	}()
 
 	_, err = keycmd.CombinedOutput()
-	if err != nil && !(err.Error() == "wait: no child processes" || err.Error() == "waitid: no child processes") {
+	if err != nil {
 		return xerrors.Errorf("cannot create SSH hostkey file: %w", err)
 	}
 
@@ -189,26 +227,48 @@ func prepareSSHKey(ctx context.Context, sshkey string) error {
 	return nil
 }
 
-func writeSSHEnv(cfg *Config) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
+func ensureSSHDir(cfg *Config) error {
+	home := "/home/gitpod"
 
 	d := filepath.Join(home, ".ssh")
-	err = os.MkdirAll(d, 0o755)
+	err := os.MkdirAll(d, 0o700)
 	if err != nil {
 		return xerrors.Errorf("cannot create $HOME/.ssh: %w", err)
 	}
-
-	fn := filepath.Join(d, "supervisor_env")
-	env := strings.Join(buildChildProcEnv(cfg, nil), "\n")
-	err = os.WriteFile(fn, []byte(env), 0o644)
-	if err != nil {
-		return xerrors.Errorf("cannot write %s: %w", fn, err)
-	}
-
 	_ = exec.Command("chown", "-R", fmt.Sprintf("%d:%d", gitpodUID, gitpodGID), d).Run()
 
 	return nil
+}
+
+func configureSSHDefaultDir(cfg *Config) {
+	if cfg.RepoRoot == "" {
+		log.Error("cannot configure ssh default dir with empty repo root")
+		return
+	}
+	file, err := os.OpenFile("/home/gitpod/.bash_profile", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
+	if err != nil {
+		log.WithError(err).Error("cannot write .bash_profile")
+	}
+	defer file.Close()
+	if _, err := file.WriteString(fmt.Sprintf("\nif [[ -n $SSH_CONNECTION ]]; then cd \"%s\"; fi\n", cfg.RepoRoot)); err != nil {
+		log.WithError(err).Error("write .bash_profile failed")
+	}
+}
+
+func configureSSHMessageOfTheDay() {
+	msg := []byte(`Welcome to Gitpod: Always ready to code. Try the following commands to get started:
+
+	gp tasks list         List all your defined tasks in .gitpod.yml
+	gp tasks attach       Attach your terminal to a workspace task
+
+	gp ports list         Lists workspace ports and their states
+	gp stop               Stop current workspace
+	gp help               To learn about the gp CLI commands
+
+For more information, see the Gitpod documentation: https://gitpod.io/docs
+`)
+
+	if err := ioutil.WriteFile("/etc/motd", msg, 0o644); err != nil {
+		log.WithError(err).Error("write /etc/motd failed")
+	}
 }

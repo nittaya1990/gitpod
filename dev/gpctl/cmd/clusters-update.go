@@ -1,6 +1,6 @@
 // Copyright (c) 2021 Gitpod GmbH. All rights reserved.
 // Licensed under the GNU Affero General Public License (AGPL).
-// See License-AGPL.txt in the project root for license information.
+// See License.AGPL.txt in the project root for license information.
 
 package cmd
 
@@ -87,7 +87,7 @@ var clustersUpdateMaxScoreCmd = &cobra.Command{
 }
 
 var clustersUpdateAdmissionConstraintCmd = &cobra.Command{
-	Use:   "admission-constraint add|remove has-feature-preview|has-permission=<permission>|has-user-level=<level>",
+	Use:   "admission-constraint add|remove has-feature-preview|has-permission=<permission>",
 	Short: "Updates a cluster's admission constraints",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -126,17 +126,6 @@ var clustersUpdateAdmissionConstraintCmd = &cobra.Command{
 					},
 				},
 			}
-		} else if strings.HasPrefix(args[1], "has-user-level=") {
-			request.Property = &api.UpdateRequest_AdmissionConstraint{
-				AdmissionConstraint: &api.ModifyAdmissionConstraint{
-					Add: add,
-					Constraint: &api.AdmissionConstraint{
-						Constraint: &api.AdmissionConstraint_HasUserLevel{
-							HasUserLevel: strings.TrimPrefix(args[1], "has-user-level="),
-						},
-					},
-				},
-			}
 		} else {
 			log.Fatalf("unknown constraint: %s", args[1])
 		}
@@ -159,61 +148,9 @@ var clustersUpdateAdmissionConstraintCmd = &cobra.Command{
 	},
 }
 
-var clustersUpdateAdmissionPreferenceCmd = &cobra.Command{
-	Use:   "admission-preference add|remove user-level=<level>",
-	Short: "Updates a cluster's admission preferences",
-	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		name := getClusterName()
-
-		var add bool
-		switch args[0] {
-		case "add":
-			add = true
-		case "remove":
-			add = false
-		default:
-			log.Fatalf("must be add or remove instead of \"%s\"", args[0])
-		}
-
-		request := &api.UpdateRequest{Name: name}
-		if strings.HasPrefix(args[1], "user-level=") {
-			request.Property = &api.UpdateRequest_AdmissionPreference{
-				AdmissionPreference: &api.ModifyAdmissionPreference{
-					Add: add,
-					Preference: &api.AdmissionPreference{
-						Preference: &api.AdmissionPreference_UserLevel{
-							UserLevel: strings.TrimPrefix(args[1], "user-level="),
-						},
-					},
-				},
-			}
-		} else {
-			log.Fatalf("unknown preference: %s", args[1])
-		}
-
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		conn, client, err := getClustersClient(ctx)
-		if err != nil {
-			log.WithError(err).Fatal("cannot connect")
-		}
-		defer conn.Close()
-
-		_, err = client.Update(ctx, request)
-		if err != nil && err != io.EOF {
-			log.Fatal(err)
-		}
-
-		fmt.Printf("cluster '%s' updated with admission preference %s\n", name, request.GetAdmissionPreference())
-	},
-}
-
 func init() {
 	clustersCmd.AddCommand(clustersUpdateCmd)
 	clustersUpdateCmd.AddCommand(clustersUpdateScoreCmd)
 	clustersUpdateCmd.AddCommand(clustersUpdateMaxScoreCmd)
 	clustersUpdateCmd.AddCommand(clustersUpdateAdmissionConstraintCmd)
-	clustersUpdateCmd.AddCommand(clustersUpdateAdmissionPreferenceCmd)
 }

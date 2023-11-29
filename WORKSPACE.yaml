@@ -1,36 +1,37 @@
 # this file makes this a leeway workspace
 defaultTarget: components:all
 defaultArgs:
+  imageRepoBase: "eu.gcr.io/gitpod-core-dev/build"
   coreYarnLockBase: ../..
   npmPublishTrigger: "false"
   publishToNPM: true
+  publishToJBMarketplace: true
   localAppVersion: unknown
-  codeCommit: f14b5f5730b57a05656c1fef9de2f2c22ee8a0c1
-
+  codeCommit: 82a937848fa78b21fe5f051bfd18ff0a8cd2f9ab
+  codeVersion: 1.84.2
+  codeQuality: stable
+  noVerifyJBPlugin: false
+  intellijDownloadUrl: "https://download.jetbrains.com/idea/ideaIU-2023.2.5.tar.gz"
+  golandDownloadUrl: "https://download.jetbrains.com/go/goland-2023.2.5.tar.gz"
+  pycharmDownloadUrl: "https://download.jetbrains.com/python/pycharm-professional-2023.2.5.tar.gz"
+  phpstormDownloadUrl: "https://download.jetbrains.com/webide/PhpStorm-2023.2.4.tar.gz"
+  rubymineDownloadUrl: "https://download.jetbrains.com/ruby/RubyMine-2023.2.5.tar.gz"
+  webstormDownloadUrl: "https://download.jetbrains.com/webstorm/WebStorm-2023.2.5.tar.gz"
+  riderDownloadUrl: "https://download.jetbrains.com/rider/JetBrains.Rider-2023.2.3.tar.gz"
+  clionDownloadUrl: "https://download.jetbrains.com/cpp/CLion-2023.2.2.tar.gz"
+  jbBackendVersion: "latest"
+  dockerVersion: "20.10.24"
+  dockerComposeVersion: "2.23.0-gitpod.0"
+provenance:
+  enabled: true
+  slsa: true
 defaultVariant:
-  srcs:
-    exclude:
-    # Make sure we don't include node_modules/**/*.ts by accident
-    - "**/node_modules/**"
-  config:
-    go:
-      lintCommand: ["sh", "-c", "gokart scan && golangci-lint run --disable govet,errcheck,typecheck,staticcheck --allow-parallel-runners --timeout 5m"]
-      buildFlags: ["-trimpath", "-ldflags='-buildid= -w -s'"]
-
-variants:
-- name: oss
-  components:
-    exclude:
-      - components/ee/ws-scheduler
-  srcs:
-    exclude:
-    - "**/ee"
-    - "**/ee/**"
-    - "**/*_ee.*"
-    - "**/*_ee_*.*"
   env:
-  - GITPOD_OSS_BUILD=true
+    - NODE_OPTIONS=--max_old_space_size=8192
+  srcs:
+    exclude:
+      # Make sure we don't include node_modules/**/*.ts by accident
+      - "**/node_modules/**"
   config:
     go:
-      buildTags:
-      - -tags oss
+      lintCommand: ["sh", "-c", "golangci-lint run --disable govet,errcheck,typecheck,staticcheck,structcheck -e '.*declared but not used.*' --allow-parallel-runners --timeout 15m"]

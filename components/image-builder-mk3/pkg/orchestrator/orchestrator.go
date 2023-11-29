@@ -1,21 +1,16 @@
 // Copyright (c) 2021 Gitpod GmbH. All rights reserved.
 // Licensed under the GNU Affero General Public License (AGPL).
-// See License-AGPL.txt in the project root for license information.
+// See License.AGPL.txt in the project root for license information.
 
 package orchestrator
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -23,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/ecr"
+	"github.com/docker/distribution/reference"
 	"github.com/google/uuid"
 	"github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
@@ -30,8 +27,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	common_grpc "github.com/gitpod-io/gitpod/common-go/grpc"
 	"github.com/gitpod-io/gitpod/common-go/log"
 	"github.com/gitpod-io/gitpod/common-go/tracing"
@@ -45,8 +44,8 @@ import (
 )
 
 const (
-	// buildWorkspaceOwnerID is the owner ID we pass to ws-manager
-	buildWorkspaceOwnerID = "image-builder"
+	// buildWorkspaceManagerID identifies the manager for the workspace
+	buildWorkspaceManagerID = "image-builder"
 
 	// maxBuildRuntime is the maximum time a build is allowed to take
 	maxBuildRuntime = 60 * time.Minute
@@ -58,36 +57,26 @@ const (
 
 // NewOrchestratingBuilder creates a new orchestrating image builder
 func NewOrchestratingBuilder(cfg config.Configuration) (res *Orchestrator, err error) {
-	var authentication auth.RegistryAuthenticator
-	if cfg.AuthFile != "" {
-		fn := cfg.AuthFile
+	var authentication auth.CompositeAuth
+	if cfg.PullSecretFile != "" {
+		fn := cfg.PullSecretFile
 		if tproot := os.Getenv("TELEPRESENCE_ROOT"); tproot != "" {
 			fn = filepath.Join(tproot, fn)
 		}
 
-		authentication, err = auth.NewDockerConfigFileAuth(fn)
+		ath, err := auth.NewDockerConfigFileAuth(fn)
 		if err != nil {
-			return
+			return nil, err
 		}
+		authentication = append(authentication, ath)
 	}
-
-	var builderAuthKey [32]byte
-	if cfg.BuilderAuthKeyFile != "" {
-		fn := cfg.BuilderAuthKeyFile
-		if tproot := os.Getenv("TELEPRESENCE_ROOT"); tproot != "" {
-			fn = filepath.Join(tproot, fn)
-		}
-
-		var data []byte
-		data, err = ioutil.ReadFile(fn)
+	if cfg.EnableAdditionalECRAuth {
+		awsCfg, err := awsconfig.LoadDefaultConfig(context.Background())
 		if err != nil {
-			return
+			return nil, err
 		}
-		if len(data) != 32 {
-			err = xerrors.Errorf("builder auth key must be exactly 32 bytes long")
-			return
-		}
-		copy(builderAuthKey[:], data)
+		ecrc := ecr.NewFromConfig(awsCfg)
+		authentication = append(authentication, auth.NewECRAuthenticator(ecrc))
 	}
 
 	var wsman wsmanapi.WorkspaceManagerClient
@@ -108,7 +97,7 @@ func NewOrchestratingBuilder(cfg config.Configuration) (res *Orchestrator, err e
 
 			grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 		} else {
-			grpcOpts = append(grpcOpts, grpc.WithInsecure())
+			grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		}
 		conn, err := grpc.Dial(cfg.WorkspaceManager.Address, grpcOpts...)
 		if err != nil {
@@ -126,12 +115,11 @@ func NewOrchestratingBuilder(cfg config.Configuration) (res *Orchestrator, err e
 		},
 		RefResolver: &resolve.StandaloneRefResolver{},
 
-		wsman:          wsman,
-		buildListener:  make(map[string]map[buildListener]struct{}),
-		logListener:    make(map[string]map[logListener]struct{}),
-		censorship:     make(map[string][]string),
-		builderAuthKey: builderAuthKey,
-		metrics:        newMetrics(),
+		wsman:         wsman,
+		buildListener: make(map[string]map[buildListener]struct{}),
+		logListener:   make(map[string]map[logListener]struct{}),
+		censorship:    make(map[string][]string),
+		metrics:       newMetrics(),
 	}
 	o.monitor = newBuildMonitor(o, o.wsman)
 
@@ -147,11 +135,10 @@ type Orchestrator struct {
 
 	wsman wsmanapi.WorkspaceManagerClient
 
-	builderAuthKey [32]byte
-	buildListener  map[string]map[buildListener]struct{}
-	logListener    map[string]map[logListener]struct{}
-	censorship     map[string][]string
-	mu             sync.RWMutex
+	buildListener map[string]map[buildListener]struct{}
+	logListener   map[string]map[logListener]struct{}
+	censorship    map[string][]string
+	mu            sync.RWMutex
 
 	monitor *buildMonitor
 
@@ -170,14 +157,13 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 func (o *Orchestrator) ResolveBaseImage(ctx context.Context, req *protocol.ResolveBaseImageRequest) (resp *protocol.ResolveBaseImageResponse, err error) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "ResolveBaseImage")
 	defer tracing.FinishSpan(span, &err)
-
 	tracing.LogRequestSafe(span, req)
 
 	reqauth := o.AuthResolver.ResolveRequestAuth(req.Auth)
 
 	refstr, err := o.getAbsoluteImageRef(ctx, req.Ref, reqauth)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "cannot resolve base image ref: %v", err)
+		return nil, err
 	}
 
 	return &protocol.ResolveBaseImageResponse{
@@ -193,10 +179,13 @@ func (o *Orchestrator) ResolveWorkspaceImage(ctx context.Context, req *protocol.
 
 	reqauth := o.AuthResolver.ResolveRequestAuth(req.Auth)
 	baseref, err := o.getBaseImageRef(ctx, req.Source, reqauth)
+	if _, ok := status.FromError(err); err != nil && ok {
+		return nil, err
+	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cannot resolve base image: %s", err.Error())
 	}
-	refstr, err := o.getWorkspaceImageRef(ctx, baseref, reqauth)
+	refstr, err := o.getWorkspaceImageRef(ctx, baseref)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "cannot produce image ref: %v", err)
 	}
@@ -204,7 +193,7 @@ func (o *Orchestrator) ResolveWorkspaceImage(ctx context.Context, req *protocol.
 
 	// to check if the image exists we must have access to the image caching registry and the refstr we check here does not come
 	// from the user. Thus we can safely use auth.AllowedAuthForAll here.
-	auth, err := auth.AllowedAuthForAll.GetAuthFor(o.Auth, refstr)
+	auth, err := auth.AllowedAuthForAll().GetAuthFor(ctx, o.Auth, refstr)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cannot get workspace image authentication: %v", err)
 	}
@@ -239,19 +228,18 @@ func (o *Orchestrator) Build(req *protocol.BuildRequest, resp protocol.ImageBuil
 
 	// resolve build request authentication
 	reqauth := o.AuthResolver.ResolveRequestAuth(req.Auth)
-
 	baseref, err := o.getBaseImageRef(ctx, req.Source, reqauth)
-	if xerrors.Is(err, resolve.ErrNotFound) {
-		return status.Error(codes.NotFound, "cannot resolve base image")
+	if _, ok := status.FromError(err); err != nil && ok {
+		return err
 	}
 	if err != nil {
-		return status.Errorf(codes.Internal, "cannot resolve base image: %q", err)
+		return status.Errorf(codes.Internal, "cannot resolve base image: %s", err.Error())
 	}
-	wsrefstr, err := o.getWorkspaceImageRef(ctx, baseref, reqauth)
+	wsrefstr, err := o.getWorkspaceImageRef(ctx, baseref)
 	if err != nil {
 		return status.Errorf(codes.Internal, "cannot produce workspace image ref: %q", err)
 	}
-	wsrefAuth, err := auth.AllowedAuthForAll.GetAuthFor(o.Auth, wsrefstr)
+	wsrefAuth, err := auth.AllowedAuthForAll().GetAuthFor(ctx, o.Auth, wsrefstr)
 	if err != nil {
 		return status.Errorf(codes.Internal, "cannot get workspace image authentication: %q", err)
 	}
@@ -264,9 +252,9 @@ func (o *Orchestrator) Build(req *protocol.BuildRequest, resp protocol.ImageBuil
 	if exists && !req.GetForceRebuild() {
 		// If the workspace image exists, so should the baseimage if we've built it.
 		// If we didn't build it and the base image doesn't exist anymore, getWorkspaceImageRef will have failed to resolve the baseref.
-		baserefAbsolute, err := o.getAbsoluteImageRef(ctx, baseref, auth.AllowedAuthForAll)
+		baserefAbsolute, err := o.getAbsoluteImageRef(ctx, baseref, auth.AllowedAuthForAll())
 		if err != nil {
-			return status.Errorf(codes.Internal, "cannot resolve base image ref: %q", err)
+			return err
 		}
 
 		// image has already been built - no need for us to start building
@@ -280,6 +268,8 @@ func (o *Orchestrator) Build(req *protocol.BuildRequest, resp protocol.ImageBuil
 		}
 		return nil
 	}
+
+	o.metrics.BuildStarted()
 
 	// Once a build is running we don't want it cancelled becuase the server disconnected i.e. during deployment.
 	// Instead we want to impose our own timeout/lifecycle on the build. Using context.WithTimeout does not shadow its parent's
@@ -316,15 +306,6 @@ func (o *Orchestrator) Build(req *protocol.BuildRequest, resp protocol.ImageBuil
 	}
 	contextPath = filepath.Join("/workspace", strings.TrimPrefix(contextPath, "/workspace"))
 
-	baseLayerAuth, err := o.getAuthFor(reqauth)
-	if err != nil {
-		return
-	}
-	gplayerAuth, err := o.getAuthFor(reqauth.ExplicitlyAll(), wsrefstr, baseref)
-	if err != nil {
-		return
-	}
-
 	o.censor(buildID, []string{
 		wsrefstr,
 		baseref,
@@ -342,6 +323,28 @@ func (o *Orchestrator) Build(req *protocol.BuildRequest, resp protocol.ImageBuil
 		return false
 	}
 
+	pbaseref, err := reference.ParseNormalizedNamed(baseref)
+	if err != nil {
+		return xerrors.Errorf("cannot parse baseref: %v", err)
+	}
+	bobBaseref := "localhost:8080/base"
+	if r, ok := pbaseref.(reference.Digested); ok {
+		bobBaseref += "@" + r.Digest().String()
+	} else {
+		bobBaseref += ":latest"
+	}
+	wsref, err := reference.ParseNamed(wsrefstr)
+	var additionalAuth []byte
+	if err == nil {
+		ath := reqauth.GetImageBuildAuthFor(ctx, o.Auth, []string{reference.Domain(pbaseref), auth.DummyECRRegistryDomain}, []string{
+			reference.Domain(wsref),
+		})
+		additionalAuth, err = json.Marshal(ath)
+		if err != nil {
+			return xerrors.Errorf("cannot marshal additional auth: %w", err)
+		}
+	}
+
 	var swr *wsmanapi.StartWorkspaceResponse
 	err = retry(ctx, func(ctx context.Context) (err error) {
 		swr, err = o.wsman.StartWorkspace(ctx, &wsmanapi.StartWorkspaceRequest{
@@ -350,33 +353,42 @@ func (o *Orchestrator) Build(req *protocol.BuildRequest, resp protocol.ImageBuil
 			Metadata: &wsmanapi.WorkspaceMetadata{
 				MetaId: buildID,
 				Annotations: map[string]string{
-					annotationRef:     wsrefstr,
-					annotationBaseRef: baseref,
+					annotationRef:       wsrefstr,
+					annotationBaseRef:   baseref,
+					annotationManagedBy: buildWorkspaceManagerID,
 				},
-				// TODO(cw): use the actual image build owner here and move to annotation based filter
-				//           when retrieving running image builds.
-				Owner: buildWorkspaceOwnerID,
+				Owner: req.GetTriggeredBy(),
 			},
 			Spec: &wsmanapi.StartWorkspaceSpec{
-				CheckoutLocation:   ".",
-				Initializer:        initializer,
-				Timeout:            maxBuildRuntime.String(),
-				WorkspaceImage:     o.Config.BuilderImage,
-				DeprecatedIdeImage: o.Config.BuilderImage,
+				Initializer:    initializer,
+				Timeout:        maxBuildRuntime.String(),
+				WorkspaceImage: o.Config.BuilderImage,
 				IdeImage: &wsmanapi.IDEImage{
-					WebRef: o.Config.BuilderImage,
+					WebRef:        o.Config.BuilderImage,
+					SupervisorRef: req.SupervisorRef,
 				},
 				WorkspaceLocation: contextPath,
 				Envvars: []*wsmanapi.EnvironmentVariable{
-					{Name: "BOB_TARGET_REF", Value: wsrefstr},
-					{Name: "BOB_BASE_REF", Value: baseref},
+					{Name: "BOB_TARGET_REF", Value: "localhost:8080/target:latest"},
+					{Name: "BOB_BASE_REF", Value: bobBaseref},
 					{Name: "BOB_BUILD_BASE", Value: buildBase},
-					{Name: "BOB_BASELAYER_AUTH", Value: baseLayerAuth},
-					{Name: "BOB_WSLAYER_AUTH", Value: gplayerAuth},
 					{Name: "BOB_DOCKERFILE_PATH", Value: dockerfilePath},
 					{Name: "BOB_CONTEXT_DIR", Value: contextPath},
-					{Name: "BOB_AUTH_KEY", Value: string(o.builderAuthKey[:])},
 					{Name: "GITPOD_TASKS", Value: `[{"name": "build", "init": "sudo -E /app/bob build"}]`},
+					{Name: "WORKSPACEKIT_RING2_ENCLAVE", Value: "/app/bob proxy"},
+					{Name: "WORKSPACEKIT_BOBPROXY_BASEREF", Value: baseref},
+					{Name: "WORKSPACEKIT_BOBPROXY_TARGETREF", Value: wsrefstr},
+					{
+						Name: "WORKSPACEKIT_BOBPROXY_AUTH",
+						Secret: &wsmanapi.EnvironmentVariable_SecretKeyRef{
+							SecretName: o.Config.PullSecret,
+							Key:        ".dockerconfigjson",
+						},
+					},
+					{
+						Name:  "WORKSPACEKIT_BOBPROXY_ADDITIONALAUTH",
+						Value: string(additionalAuth),
+					},
 					{Name: "SUPERVISOR_DEBUG_ENABLE", Value: fmt.Sprintf("%v", log.Log.Logger.IsLevelEnabled(logrus.DebugLevel))},
 				},
 			},
@@ -428,6 +440,10 @@ func (o *Orchestrator) Build(req *protocol.BuildRequest, resp protocol.ImageBuil
 		if update.Status == protocol.BuildStatus_done_failure || update.Status == protocol.BuildStatus_done_success {
 			// build is done
 			o.clearListener(buildID)
+			o.metrics.BuildDone(update.Status == protocol.BuildStatus_done_success)
+			if update.Status != protocol.BuildStatus_done_success {
+				log.WithField("UserID", req.GetTriggeredBy()).Error("image build done failed for user")
+			}
 			break
 		}
 	}
@@ -528,8 +544,11 @@ func (o *Orchestrator) checkImageExists(ctx context.Context, ref string, authent
 	span.SetTag("ref", ref)
 
 	_, err = o.RefResolver.Resolve(ctx, ref, resolve.WithAuthentication(authentication))
-	if err == resolve.ErrNotFound {
+	if errors.Is(err, resolve.ErrNotFound) {
 		return false, nil
+	}
+	if errors.Is(err, resolve.ErrUnauthorized) {
+		return false, status.Errorf(codes.Unauthenticated, "cannot check if image exists: %q", err)
 	}
 	if err != nil {
 		return false, err
@@ -540,12 +559,22 @@ func (o *Orchestrator) checkImageExists(ctx context.Context, ref string, authent
 
 // getAbsoluteImageRef returns the "digest" form of an image, i.e. contains no mutable image tags
 func (o *Orchestrator) getAbsoluteImageRef(ctx context.Context, ref string, allowedAuth auth.AllowedAuthFor) (res string, err error) {
-	auth, err := allowedAuth.GetAuthFor(o.Auth, ref)
+	auth, err := allowedAuth.GetAuthFor(ctx, o.Auth, ref)
 	if err != nil {
-		return "", xerrors.Errorf("cannt resolve base image ref: %w", err)
+		return "", status.Errorf(codes.InvalidArgument, "cannt resolve base image ref: %v", err)
 	}
 
-	return o.RefResolver.Resolve(ctx, ref, resolve.WithAuthentication(auth))
+	ref, err = o.RefResolver.Resolve(ctx, ref, resolve.WithAuthentication(auth))
+	if errors.Is(err, resolve.ErrNotFound) {
+		return "", status.Error(codes.NotFound, "cannot resolve image")
+	}
+	if errors.Is(err, resolve.ErrUnauthorized) {
+		return "", status.Error(codes.Unauthenticated, "cannot resolve image")
+	}
+	if err != nil {
+		return "", status.Errorf(codes.Internal, "cannot resolve image: %v", err)
+	}
+	return ref, nil
 }
 
 func (o *Orchestrator) getBaseImageRef(ctx context.Context, bs *protocol.BuildSource, allowedAuth auth.AllowedAuthFor) (res string, err error) {
@@ -609,7 +638,7 @@ func (o *Orchestrator) getBaseImageRef(ctx context.Context, bs *protocol.BuildSo
 	}
 }
 
-func (o *Orchestrator) getWorkspaceImageRef(ctx context.Context, baseref string, allowedAuth auth.AllowedAuthFor) (ref string, err error) {
+func (o *Orchestrator) getWorkspaceImageRef(ctx context.Context, baseref string) (ref string, err error) {
 	cnt := []byte(fmt.Sprintf("%s\n%d\n", baseref, workspaceBuildProcessVersion))
 	hash := sha256.New()
 	n, err := hash.Write(cnt)
@@ -655,50 +684,6 @@ func (c *parentCantCancelContext) Err() error {
 
 func (c *parentCantCancelContext) Value(key interface{}) interface{} {
 	return c.Delegate.Value(key)
-}
-
-// source: https://astaxie.gitbooks.io/build-web-application-with-golang/en/09.6.html
-func encrypt(plaintext []byte, key [32]byte) ([]byte, error) {
-	c, err := aes.NewCipher(key[:])
-	if err != nil {
-		return nil, err
-	}
-
-	gcm, err := cipher.NewGCM(c)
-	if err != nil {
-		return nil, err
-	}
-
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
-	}
-
-	return gcm.Seal(nonce, nonce, plaintext, nil), nil
-}
-
-func (o *Orchestrator) getAuthFor(inp auth.AllowedAuthFor, refs ...string) (res string, err error) {
-	buildauth, err := inp.GetImageBuildAuthFor(o.Auth, refs)
-	if err != nil {
-		return
-	}
-	resb, err := json.MarshalIndent(buildauth, "", " ")
-	if err != nil {
-		return
-	}
-
-	res = base64.RawStdEncoding.EncodeToString(resb)
-
-	if len(o.builderAuthKey) > 0 {
-		resb, err = encrypt(resb, o.builderAuthKey)
-		if err != nil {
-			return
-		}
-
-		res = base64.RawStdEncoding.EncodeToString(resb)
-	}
-
-	return
 }
 
 type buildListener chan *api.BuildResponse

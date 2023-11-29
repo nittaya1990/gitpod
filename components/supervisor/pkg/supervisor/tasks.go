@@ -1,6 +1,6 @@
 // Copyright (c) 2020 Gitpod GmbH. All rights reserved.
 // Licensed under the GNU Affero General Public License (AGPL).
-// See License-AGPL.txt in the project root for license information.
+// See License.AGPL.txt in the project root for license information.
 
 package supervisor
 
@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"regexp"
 	"strconv"
@@ -106,9 +107,11 @@ type tasksManager struct {
 	terminalService *terminal.MuxTerminalService
 	contentState    ContentState
 	reporter        headlessTaskProgressReporter
+	ideReady        *ideReadyState
+	desktopIdeReady *ideReadyState
 }
 
-func newTasksManager(config *Config, terminalService *terminal.MuxTerminalService, contentState ContentState, reporter headlessTaskProgressReporter) *tasksManager {
+func newTasksManager(config *Config, terminalService *terminal.MuxTerminalService, contentState ContentState, reporter headlessTaskProgressReporter, ideReady *ideReadyState, desktopIdeReady *ideReadyState) *tasksManager {
 	return &tasksManager{
 		config:          config,
 		terminalService: terminalService,
@@ -117,6 +120,8 @@ func newTasksManager(config *Config, terminalService *terminal.MuxTerminalServic
 		subscriptions:   make(map[*tasksSubscription]struct{}),
 		ready:           make(chan struct{}),
 		storeLocation:   logs.TerminalStoreLocation,
+		ideReady:        ideReady,
+		desktopIdeReady: desktopIdeReady,
 	}
 }
 
@@ -176,11 +181,8 @@ func (tm *tasksManager) init(ctx context.Context) {
 		log.WithError(err).Error()
 		return
 	}
-	if tasks == nil && tm.config.isHeadless() {
+	if len(tasks) == 0 && tm.config.isHeadless() {
 		return
-	}
-	if tasks == nil {
-		tasks = &[]TaskConfig{{}}
 	}
 
 	select {
@@ -192,15 +194,16 @@ func (tm *tasksManager) init(ctx context.Context) {
 	contentSource, _ := tm.contentState.ContentSource()
 	tm.contentSource = contentSource
 
-	for i, config := range *tasks {
+	// give 1s window between content and tasks for IDE to startup, i.e. no competition for resources
+	tm.waitForIde(ctx, 1*time.Second)
+
+	for i, config := range tasks {
 		id := strconv.Itoa(i)
 		presentation := &api.TaskPresentation{}
-		title := ""
 		if config.Name != nil {
 			presentation.Name = *config.Name
-			title = *config.Name
 		} else {
-			presentation.Name = tm.terminalService.DefaultWorkdir
+			presentation.Name = "Gitpod Task " + strconv.Itoa(i+1)
 		}
 		if config.OpenIn != nil {
 			presentation.OpenIn = *config.OpenIn
@@ -216,14 +219,36 @@ func (tm *tasksManager) init(ctx context.Context) {
 			},
 			config:      config,
 			successChan: make(chan taskSuccess, 1),
-			title:       title,
+			title:       presentation.Name,
 		}
-		task.command = getCommand(task, tm.config.isHeadless(), tm.contentSource, tm.storeLocation)
+		task.command = getCommand(task, tm.config.isHeadless(), tm.config.isPrebuild(), tm.contentSource, tm.storeLocation)
 		if tm.config.isHeadless() && task.command == "exit" {
 			task.State = api.TaskState_closed
 			task.successChan <- taskSuccessful
 		}
 		tm.tasks = append(tm.tasks, task)
+	}
+}
+
+func (tm *tasksManager) waitForIde(parent context.Context, timeout time.Duration) {
+	if tm.ideReady == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		return
+	case <-tm.ideReady.Wait():
+	}
+
+	if tm.desktopIdeReady == nil {
+		return
+	}
+	select {
+	case <-ctx.Done():
+		return
+	case <-tm.desktopIdeReady.Wait():
 	}
 }
 
@@ -258,12 +283,8 @@ func (tm *tasksManager) Run(ctx context.Context, wg *sync.WaitGroup, successChan
 				}
 			}
 		}
-		var readTimeout time.Duration
-		if !tm.config.isHeadless() {
-			readTimeout = 5 * time.Second
-		}
 		resp, err := tm.terminalService.OpenWithOptions(ctx, openRequest, terminal.TermOptions{
-			ReadTimeout: readTimeout,
+			ReadTimeout: 5 * time.Second,
 			Title:       t.title,
 		})
 		if err != nil {
@@ -298,8 +319,7 @@ func (tm *tasksManager) Run(ctx context.Context, wg *sync.WaitGroup, successChan
 				} else {
 					t.successChan <- taskFailed(state.String())
 				}
-			} else if err != nil && strings.Contains(err.Error(), "no child process") {
-				// our own reaper broke Go's child process handling
+			} else if err != nil {
 				t.successChan <- taskSuccessful
 			} else {
 				msg := "cannot wait for task"
@@ -332,14 +352,14 @@ func (tm *tasksManager) Run(ctx context.Context, wg *sync.WaitGroup, successChan
 		}
 	}
 
-	if tm.config.isHeadless() && tm.reporter != nil {
+	if tm.config.isPrebuild() && tm.reporter != nil {
 		tm.reporter.done(success)
 	}
 	successChan <- success
 }
 
-func getCommand(task *task, isHeadless bool, contentSource csapi.WorkspaceInitSource, storeLocation string) string {
-	commands := getCommands(task, isHeadless, contentSource, storeLocation)
+func getCommand(task *task, isHeadless bool, isPrebuild bool, contentSource csapi.WorkspaceInitSource, storeLocation string) string {
+	commands := getCommands(task, isPrebuild, contentSource, storeLocation)
 	command := composeCommand(composeCommandOptions{
 		commands: commands,
 		format:   "{\n%s\n}",
@@ -390,8 +410,8 @@ func getHistfileCommand(task *task, commands []*string, contentSource csapi.Work
 	return " HISTFILE=" + histfile + " history -r"
 }
 
-func getCommands(task *task, isHeadless bool, contentSource csapi.WorkspaceInitSource, storeLocation string) []*string {
-	if isHeadless {
+func getCommands(task *task, isPrebuild bool, contentSource csapi.WorkspaceInitSource, storeLocation string) []*string {
+	if isPrebuild {
 		// prebuild
 		return []*string{task.config.Before, task.config.Init, task.config.Prebuild}
 	}
@@ -414,15 +434,18 @@ func prebuildLogFileName(task *task, storeLocation string) string {
 	return logs.PrebuildLogFileName(storeLocation, task.Id)
 }
 
-func (tm *tasksManager) watch(task *task, terminal *terminal.Term) {
-	if !tm.config.isHeadless() {
+func (tm *tasksManager) watch(task *task, term *terminal.Term) {
+	if !tm.config.isPrebuild() {
 		return
 	}
 
 	var (
-		terminalLog = log.WithField("pid", terminal.Command.Process.Pid)
-		stdout      = terminal.Stdout.Listen()
-		start       = time.Now()
+		terminalLog = log.WithField("pid", term.Command.Process.Pid)
+		stdout      = term.Stdout.ListenWithOptions(terminal.TermListenOptions{
+			// ensure logging of entire task output
+			ReadTimeout: terminal.NoTimeout,
+		})
+		start = time.Now()
 	)
 	go func() {
 		defer stdout.Close()
@@ -471,15 +494,15 @@ func (tm *tasksManager) watch(task *task, terminal *terminal.Term) {
 
 		duration := ""
 		if elapsed >= 1*time.Minute {
-			elapsedInMinutes := strconv.Itoa(int(elapsed.Minutes()))
-			duration = "🎉 Well done on saving " + elapsedInMinutes + " minute"
+			elapsedInMinutes := strconv.Itoa(int(math.Round(elapsed.Minutes())))
+			duration = "⏱️ Well done on saving " + elapsedInMinutes + " minute"
 			if elapsedInMinutes != "1" {
 				duration += "s"
 			}
 			duration += "\r\n"
 		}
 
-		endMessage := "\r\n🤙 This task ran as a workspace prebuild\r\n" + duration + "\r\n"
+		endMessage := "\r\n🍊 This task ran as a workspace prebuild\r\n" + duration + "\r\n"
 		_, _ = writer.Write([]byte(endMessage))
 
 		if tm.reporter != nil {
@@ -505,7 +528,7 @@ func importParentLogAndGetDuration(fn string, out io.Writer) time.Duration {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		l := scanner.Text()
-		if strings.Contains(l, "🤙 This task ran as a workspace prebuild") {
+		if strings.Contains(l, "🍊 This task ran as a workspace prebuild") {
 			break
 		}
 		out.Write([]byte(l + "\n"))
@@ -513,7 +536,7 @@ func importParentLogAndGetDuration(fn string, out io.Writer) time.Duration {
 	if !scanner.Scan() {
 		return 0
 	}
-	reg, err := regexp.Compile(`🎉 Well done on saving (\d+) minute`)
+	reg, err := regexp.Compile(`⏱️ Well done on saving (\d+) minute`)
 	if err != nil {
 		return 0
 	}
